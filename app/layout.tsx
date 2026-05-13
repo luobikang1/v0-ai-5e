@@ -7,8 +7,8 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'White Fox AI - AI 图像生成平台',
-  description: '使用 AI 进行文本到图像和图像到图像生成，支持多种采样方法和自定义尺寸',
+  title: '白狐 - AI 图像生成平台',
+  description: '使用 AI 进行文本到图像、图像到图像和参考图生成，支持多语言、咒语系统和笔记本功能',
   generator: 'v0.app',
   icons: {
     icon: [

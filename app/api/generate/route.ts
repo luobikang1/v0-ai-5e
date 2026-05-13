@@ -18,10 +18,13 @@ interface GenerateRequest {
   steps: number
   mode: string
   sourceImage?: string
+  referenceImage?: string
   strength?: number
+  referenceStrength?: number
   sampler?: string
   width?: number
   height?: number
+  backgroundColor?: string
 }
 
 async function generateWithCloudflare(
@@ -60,6 +63,16 @@ async function generateWithCloudflare(
       ...body,
       image: Array.from(Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))),
       strength: request.strength || 0.75,
+    }
+  }
+
+  // For reference image mode
+  if (request.mode === "reference-image" && request.referenceImage) {
+    const base64Data = request.referenceImage.split(",")[1]
+    body = {
+      ...body,
+      image: Array.from(Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))),
+      strength: request.referenceStrength || 0.5,
     }
   }
 
