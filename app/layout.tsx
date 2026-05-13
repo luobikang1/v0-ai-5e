@@ -7,8 +7,8 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'AI 图像生成器 - Cloudflare AI',
-  description: '使用 Cloudflare AI 进行文本到图像和图像到图像生成',
+  title: 'White Fox AI - AI 图像生成平台',
+  description: '使用 AI 进行文本到图像和图像到图像生成，支持多种采样方法和自定义尺寸',
   generator: 'v0.app',
   icons: {
     icon: [

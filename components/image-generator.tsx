@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { 
   ImageIcon, Wand2, Upload, Sparkles, Download, Trash2, Settings2, 
   Plus, X, BookOpen, Save, FolderOpen, ExternalLink, Copy, Check,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, History, Clock, Calendar
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -40,6 +40,23 @@ interface GeneratedImage {
   negativePrompt: string
   timestamp: Date
   model: string
+  width: number
+  height: number
+  sampler: string
+  steps: number
+}
+
+interface HistoryRecord {
+  id: string
+  prompt: string
+  negativePrompt: string
+  timestamp: string
+  model: string
+  width: number
+  height: number
+  sampler: string
+  steps: number
+  imageData?: string
 }
 
 interface NegativePromptPreset {
@@ -102,6 +119,33 @@ const DOWNLOAD_FORMATS = [
   { id: "webp", name: "WebP", mime: "image/webp" },
 ]
 
+const SAMPLERS = [
+  { id: "euler", name: "Euler" },
+  { id: "euler_a", name: "Euler A" },
+  { id: "dpm_2", name: "DPM2" },
+  { id: "dpm_2_a", name: "DPM2 A" },
+  { id: "dpm_pp_2s_a", name: "DPM++ 2S A" },
+  { id: "dpm_pp_2m", name: "DPM++ 2M" },
+  { id: "dpm_pp_sde", name: "DPM++ SDE" },
+  { id: "ddim", name: "DDIM" },
+  { id: "lms", name: "LMS" },
+  { id: "heun", name: "Heun" },
+]
+
+const IMAGE_SIZES = [
+  { id: "512x512", name: "512 x 512", width: 512, height: 512 },
+  { id: "768x768", name: "768 x 768", width: 768, height: 768 },
+  { id: "1024x1024", name: "1024 x 1024", width: 1024, height: 1024 },
+  { id: "512x768", name: "512 x 768 (竖版)", width: 512, height: 768 },
+  { id: "768x512", name: "768 x 512 (横版)", width: 768, height: 512 },
+  { id: "768x1024", name: "768 x 1024 (竖版)", width: 768, height: 1024 },
+  { id: "1024x768", name: "1024 x 768 (横版)", width: 1024, height: 768 },
+  { id: "custom", name: "自定义尺寸", width: 512, height: 512 },
+]
+
+const HISTORY_STORAGE_KEY = "whitefox-ai-history"
+const HISTORY_MAX_DAYS = 30
+
 export function ImageGenerator() {
   const [prompt, setPrompt] = useState("")
   const [negativePrompt, setNegativePrompt] = useState("")
@@ -114,6 +158,16 @@ export function ImageGenerator() {
   const [uploadedImage, setUploadedImage] = useState<string | null>(null)
   const [strength, setStrength] = useState([0.75])
   const [error, setError] = useState<string | null>(null)
+  
+  // Sampling and size settings
+  const [selectedSampler, setSelectedSampler] = useState("euler_a")
+  const [selectedSize, setSelectedSize] = useState("1024x1024")
+  const [customWidth, setCustomWidth] = useState(512)
+  const [customHeight, setCustomHeight] = useState(512)
+  
+  // History
+  const [historyRecords, setHistoryRecords] = useState<HistoryRecord[]>([])
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false)
   
   // Negative prompt presets
   const [negativePresets, setNegativePresets] = useState<NegativePromptPreset[]>(DEFAULT_NEGATIVE_PRESETS)
@@ -137,6 +191,62 @@ export function ImageGenerator() {
   
   // Download
   const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  // Load history from localStorage on mount
+  useEffect(() => {
+    const loadHistory = () => {
+      try {
+        const stored = localStorage.getItem(HISTORY_STORAGE_KEY)
+        if (stored) {
+          const parsed: HistoryRecord[] = JSON.parse(stored)
+          // Filter out records older than 30 days
+          const cutoffDate = new Date()
+          cutoffDate.setDate(cutoffDate.getDate() - HISTORY_MAX_DAYS)
+          const validRecords = parsed.filter(record => 
+            new Date(record.timestamp) > cutoffDate
+          )
+          setHistoryRecords(validRecords)
+          // Update storage if some records were removed
+          if (validRecords.length !== parsed.length) {
+            localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(validRecords))
+          }
+        }
+      } catch {
+        // Ignore errors
+      }
+    }
+    loadHistory()
+  }, [])
+
+  // Save history record
+  const saveToHistory = useCallback((image: GeneratedImage, imageData?: string) => {
+    const record: HistoryRecord = {
+      id: image.id,
+      prompt: image.prompt,
+      negativePrompt: image.negativePrompt,
+      timestamp: image.timestamp.toISOString(),
+      model: image.model,
+      width: image.width,
+      height: image.height,
+      sampler: image.sampler,
+      steps: image.steps,
+      imageData,
+    }
+    setHistoryRecords(prev => {
+      const updated = [record, ...prev].slice(0, 100) // Keep max 100 records
+      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updated))
+      return updated
+    })
+  }, [])
+
+  // Get current image dimensions
+  const getCurrentDimensions = useCallback(() => {
+    if (selectedSize === "custom") {
+      return { width: customWidth, height: customHeight }
+    }
+    const size = IMAGE_SIZES.find(s => s.id === selectedSize)
+    return { width: size?.width || 1024, height: size?.height || 1024 }
+  }, [selectedSize, customWidth, customHeight])
 
   // Build complete negative prompt from selected presets and custom prompts
   const buildNegativePrompt = useCallback(() => {
@@ -163,6 +273,7 @@ export function ImageGenerator() {
 
     const finalNegativePrompt = buildNegativePrompt()
     const currentModel = models.find(m => m.id === selectedModel)
+    const { width, height } = getCurrentDimensions()
 
     try {
       const response = await fetch("/api/generate", {
@@ -177,6 +288,9 @@ export function ImageGenerator() {
           mode: activeTab,
           sourceImage: uploadedImage,
           strength: strength[0],
+          sampler: selectedSampler,
+          width,
+          height,
         }),
       })
 
@@ -188,6 +302,10 @@ export function ImageGenerator() {
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)
       
+      // Convert to base64 for history storage
+      const reader = new FileReader()
+      reader.readAsDataURL(blob)
+      
       const newImage: GeneratedImage = {
         id: Date.now().toString(),
         url,
@@ -195,6 +313,14 @@ export function ImageGenerator() {
         negativePrompt: finalNegativePrompt,
         timestamp: new Date(),
         model: currentModel?.name || selectedModel,
+        width,
+        height,
+        sampler: selectedSampler,
+        steps: steps[0],
+      }
+
+      reader.onloadend = () => {
+        saveToHistory(newImage, reader.result as string)
       }
 
       setGeneratedImages((prev) => [newImage, ...prev])
@@ -230,7 +356,7 @@ export function ImageGenerator() {
         const dataUrl = canvas.toDataURL(formatInfo?.mime || "image/png", 0.95)
         const a = document.createElement("a")
         a.href = dataUrl
-        a.download = `ai-image-${prompt.slice(0, 20).replace(/\s+/g, "-")}.${format}`
+        a.download = `whitefox-ai-${prompt.slice(0, 20).replace(/\s+/g, "-")}.${format}`
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
@@ -245,7 +371,6 @@ export function ImageGenerator() {
       setCopiedId(id)
       setTimeout(() => setCopiedId(null), 2000)
     } catch {
-      // Fallback for older browsers
       const textArea = document.createElement("textarea")
       textArea.value = url
       document.body.appendChild(textArea)
@@ -259,6 +384,38 @@ export function ImageGenerator() {
 
   const handleDelete = (id: string) => {
     setGeneratedImages((prev) => prev.filter((img) => img.id !== id))
+  }
+
+  const handleDeleteHistory = (id: string) => {
+    setHistoryRecords(prev => {
+      const updated = prev.filter(r => r.id !== id)
+      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updated))
+      return updated
+    })
+  }
+
+  const handleClearHistory = () => {
+    setHistoryRecords([])
+    localStorage.removeItem(HISTORY_STORAGE_KEY)
+  }
+
+  const handleRestoreFromHistory = (record: HistoryRecord) => {
+    setPrompt(record.prompt)
+    setNegativePrompt(record.negativePrompt)
+    setSelectedSampler(record.sampler)
+    setSteps([record.steps])
+    
+    // Find matching size or set to custom
+    const matchingSize = IMAGE_SIZES.find(s => s.width === record.width && s.height === record.height)
+    if (matchingSize) {
+      setSelectedSize(matchingSize.id)
+    } else {
+      setSelectedSize("custom")
+      setCustomWidth(record.width)
+      setCustomHeight(record.height)
+    }
+    
+    setIsHistoryOpen(false)
   }
 
   const togglePreset = (presetId: string) => {
@@ -321,12 +478,23 @@ export function ImageGenerator() {
   const deleteModel = (modelId: string) => {
     const model = models.find(m => m.id === modelId)
     if (model?.type === "cloudflare" && DEFAULT_MODELS.some(dm => dm.id === modelId)) {
-      return // Don't delete default models
+      return
     }
     setModels(prev => prev.filter(m => m.id !== modelId))
     if (selectedModel === modelId) {
       setSelectedModel(DEFAULT_MODELS[0].id)
     }
+  }
+
+  const formatHistoryDate = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
+    
+    if (diffDays === 0) return "今天"
+    if (diffDays === 1) return "昨天"
+    if (diffDays < 7) return `${diffDays} 天前`
+    return date.toLocaleDateString("zh-CN")
   }
 
   const currentNegativePromptPreview = buildNegativePrompt()
@@ -341,10 +509,95 @@ export function ImageGenerator() {
               <Sparkles className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-lg font-semibold text-foreground">AI 图像生成器</h1>
-              <p className="text-xs text-muted-foreground">支持负向提示词训练</p>
+              <h1 className="text-lg font-semibold text-foreground">White Fox AI</h1>
+              <p className="text-xs text-muted-foreground">AI 图像生成平台</p>
             </div>
           </div>
+          
+          {/* History Button */}
+          <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">
+                <History className="w-4 h-4" />
+                历史记录
+                {historyRecords.length > 0 && (
+                  <Badge variant="secondary" className="text-xs">{historyRecords.length}</Badge>
+                )}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <History className="w-5 h-5" />
+                  生成历史 (近30天)
+                </DialogTitle>
+                <DialogDescription>
+                  查看和恢复之前的生成记录
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex-1 overflow-y-auto space-y-3 py-4">
+                {historyRecords.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Clock className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>暂无历史记录</p>
+                  </div>
+                ) : (
+                  historyRecords.map((record) => (
+                    <Card key={record.id} className="bg-secondary/30">
+                      <CardContent className="p-4">
+                        <div className="flex gap-4">
+                          {record.imageData && (
+                            <img
+                              src={record.imageData}
+                              alt={record.prompt}
+                              className="w-20 h-20 object-cover rounded-lg flex-shrink-0"
+                            />
+                          )}
+                          <div className="flex-1 min-w-0 space-y-2">
+                            <p className="text-sm text-foreground line-clamp-2">{record.prompt}</p>
+                            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <Calendar className="w-3 h-3" />
+                                {formatHistoryDate(record.timestamp)}
+                              </span>
+                              <Badge variant="outline" className="text-xs">{record.model}</Badge>
+                              <Badge variant="outline" className="text-xs">{record.width}x{record.height}</Badge>
+                              <Badge variant="outline" className="text-xs">{record.sampler}</Badge>
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => handleRestoreFromHistory(record)}
+                            >
+                              恢复
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => handleDeleteHistory(record.id)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </div>
+              {historyRecords.length > 0 && (
+                <DialogFooter>
+                  <Button variant="destructive" onClick={handleClearHistory}>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    清空历史
+                  </Button>
+                </DialogFooter>
+              )}
+            </DialogContent>
+          </Dialog>
         </div>
       </header>
 
@@ -375,7 +628,7 @@ export function ImageGenerator() {
                   </CardHeader>
                   <CardContent>
                     <Textarea
-                      placeholder="描述您想要生成的图像...例如：一只可爱的橙色猫咪坐在窗台上，阳光透过窗户洒落"
+                      placeholder="描述您想要生成的图像...例如：一只可爱的白色狐狸坐在雪地上，月光洒落"
                       value={prompt}
                       onChange={(e) => setPrompt(e.target.value)}
                       className="min-h-[120px] bg-secondary/30 border-border/50 resize-none text-foreground placeholder:text-muted-foreground"
@@ -742,8 +995,11 @@ export function ImageGenerator() {
                             <span className="text-destructive/70">排除:</span> {image.negativePrompt}
                           </p>
                         )}
-                        <div className="flex items-center justify-between">
-                          <Badge variant="outline" className="text-xs">{image.model}</Badge>
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-1">
+                            <Badge variant="outline" className="text-xs">{image.model}</Badge>
+                            <Badge variant="outline" className="text-xs">{image.width}x{image.height}</Badge>
+                          </div>
                           <p className="text-xs text-muted-foreground/50">
                             {image.timestamp.toLocaleTimeString("zh-CN")}
                           </p>
@@ -866,7 +1122,6 @@ export function ImageGenerator() {
                       ))}
                     </SelectContent>
                   </Select>
-                  {/* Delete custom model button */}
                   {models.find(m => m.id === selectedModel)?.type !== "cloudflare" && (
                     <Button
                       variant="ghost"
@@ -878,6 +1133,68 @@ export function ImageGenerator() {
                       删除此模型
                     </Button>
                   )}
+                </div>
+
+                {/* Image Size */}
+                <div className="space-y-3">
+                  <Label className="text-sm text-muted-foreground">图像尺寸</Label>
+                  <Select value={selectedSize} onValueChange={setSelectedSize}>
+                    <SelectTrigger className="bg-secondary/30 border-border/50">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {IMAGE_SIZES.map((size) => (
+                        <SelectItem key={size.id} value={size.id}>
+                          {size.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedSize === "custom" && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">宽度</Label>
+                        <Input
+                          type="number"
+                          value={customWidth}
+                          onChange={(e) => setCustomWidth(Number(e.target.value))}
+                          min={256}
+                          max={2048}
+                          step={64}
+                          className="bg-secondary/30 border-border/50"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">高度</Label>
+                        <Input
+                          type="number"
+                          value={customHeight}
+                          onChange={(e) => setCustomHeight(Number(e.target.value))}
+                          min={256}
+                          max={2048}
+                          step={64}
+                          className="bg-secondary/30 border-border/50"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Sampler */}
+                <div className="space-y-3">
+                  <Label className="text-sm text-muted-foreground">采样方法</Label>
+                  <Select value={selectedSampler} onValueChange={setSelectedSampler}>
+                    <SelectTrigger className="bg-secondary/30 border-border/50">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SAMPLERS.map((sampler) => (
+                        <SelectItem key={sampler.id} value={sampler.id}>
+                          {sampler.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Steps */}
@@ -895,23 +1212,19 @@ export function ImageGenerator() {
 
                 {/* Tips */}
                 <div className="pt-4 border-t border-border/50">
-                  <h3 className="text-sm font-medium text-foreground mb-3">负向提示词技巧</h3>
+                  <h3 className="text-sm font-medium text-foreground mb-3">参数说明</h3>
                   <ul className="text-xs text-muted-foreground space-y-2">
                     <li className="flex items-start gap-2">
                       <span className="text-primary">1</span>
-                      使用预设模板快速添加常用排除项
+                      <span><strong>采样方法</strong>: Euler A 适合大多数场景，DPM++ 系列质量更高</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="text-primary">2</span>
-                      创建自定义预设保存常用组合
+                      <span><strong>推理步数</strong>: 20-30 步通常足够，更多步数效果更细腻</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="text-primary">3</span>
-                      英文负向词通常效果更好
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-primary">4</span>
-                      避免与正向提示词冲突的负向词
+                      <span><strong>图像尺寸</strong>: 较大尺寸需要更多计算资源</span>
                     </li>
                   </ul>
                 </div>
@@ -931,7 +1244,7 @@ export function ImageGenerator() {
                         const url = URL.createObjectURL(blob)
                         const a = document.createElement("a")
                         a.href = url
-                        a.download = "negative-prompt-presets.json"
+                        a.download = "whitefox-ai-presets.json"
                         a.click()
                       }}
                     >

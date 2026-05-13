@@ -19,6 +19,9 @@ interface GenerateRequest {
   mode: string
   sourceImage?: string
   strength?: number
+  sampler?: string
+  width?: number
+  height?: number
 }
 
 async function generateWithCloudflare(
@@ -37,6 +40,17 @@ async function generateWithCloudflare(
   // Add negative prompt if provided
   if (request.negativePrompt) {
     body.negative_prompt = request.negativePrompt
+  }
+
+  // Add image dimensions if provided
+  if (request.width && request.height) {
+    body.width = request.width
+    body.height = request.height
+  }
+
+  // Add sampler if provided
+  if (request.sampler) {
+    body.scheduler = request.sampler
   }
 
   // For image-to-image
@@ -78,7 +92,9 @@ async function generateWithOpenAI(
       ? `${request.prompt}. Avoid: ${request.negativePrompt}`
       : request.prompt,
     n: 1,
-    size: "1024x1024",
+    size: request.width && request.height 
+      ? `${request.width}x${request.height}` 
+      : "1024x1024",
     response_format: "b64_json",
   }
 
@@ -124,6 +140,9 @@ async function generateWithReplicate(
       prompt: request.prompt,
       negative_prompt: request.negativePrompt || "",
       num_inference_steps: request.steps,
+      width: request.width || 1024,
+      height: request.height || 1024,
+      scheduler: request.sampler || "euler_a",
     },
   }
 
@@ -184,6 +203,9 @@ async function generateWithCustomAPI(
     mode: request.mode,
     source_image: request.sourceImage,
     strength: request.strength,
+    sampler: request.sampler,
+    width: request.width,
+    height: request.height,
   }
 
   const headers: Record<string, string> = {
