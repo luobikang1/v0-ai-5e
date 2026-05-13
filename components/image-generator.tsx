@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ImageIcon, Wand2, Upload, Sparkles, Download, Trash2, Settings2, Plus, ExternalLink, Copy, Check } from "lucide-react"
+import { ImageIcon, Wand2, Upload, Sparkles, Download, Trash2, Settings2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,8 +10,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider"
 import { Label } from "@/components/ui/label"
 import { Spinner } from "@/components/ui/spinner"
-import { Input } from "@/components/ui/input"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 
 interface GeneratedImage {
@@ -19,28 +17,17 @@ interface GeneratedImage {
   url: string
   prompt: string
   timestamp: Date
-  model: string
-  blob?: Blob
 }
 
-interface AIModel {
-  id: string
-  name: string
-  description: string
-  provider: "cloudflare" | "custom"
-  endpoint?: string
-}
-
-const DEFAULT_MODELS: AIModel[] = [
-  { id: "@cf/stabilityai/stable-diffusion-xl-base-1.0", name: "Stable Diffusion XL", description: "高质量图像生成", provider: "cloudflare" },
-  { id: "@cf/lykon/dreamshaper-8-lcm", name: "DreamShaper 8 LCM", description: "快速创意生成", provider: "cloudflare" },
-  { id: "@cf/bytedance/stable-diffusion-xl-lightning", name: "SDXL Lightning", description: "极速生成", provider: "cloudflare" },
+const MODELS = [
+  { id: "@cf/stabilityai/stable-diffusion-xl-base-1.0", name: "Stable Diffusion XL", description: "高质量图像生成" },
+  { id: "@cf/lykon/dreamshaper-8-lcm", name: "DreamShaper 8 LCM", description: "快速创意生成" },
+  { id: "@cf/bytedance/stable-diffusion-xl-lightning", name: "SDXL Lightning", description: "极速生成" },
 ]
 
 export function ImageGenerator() {
   const [prompt, setPrompt] = useState("")
-  const [models, setModels] = useState<AIModel[]>(DEFAULT_MODELS)
-  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODELS[0].id)
+  const [selectedModel, setSelectedModel] = useState(MODELS[0].id)
   const [steps, setSteps] = useState([20])
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([])
@@ -48,22 +35,12 @@ export function ImageGenerator() {
   const [uploadedImage, setUploadedImage] = useState<string | null>(null)
   const [strength, setStrength] = useState([0.75])
   const [error, setError] = useState<string | null>(null)
-  const [copiedId, setCopiedId] = useState<string | null>(null)
-  
-  // New model dialog state
-  const [isAddModelOpen, setIsAddModelOpen] = useState(false)
-  const [newModelName, setNewModelName] = useState("")
-  const [newModelId, setNewModelId] = useState("")
-  const [newModelEndpoint, setNewModelEndpoint] = useState("")
-  const [newModelDescription, setNewModelDescription] = useState("")
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return
     
     setIsGenerating(true)
     setError(null)
-
-    const currentModel = models.find(m => m.id === selectedModel)
 
     try {
       const response = await fetch("/api/generate", {
@@ -76,8 +53,6 @@ export function ImageGenerator() {
           mode: activeTab,
           sourceImage: uploadedImage,
           strength: strength[0],
-          provider: currentModel?.provider || "cloudflare",
-          endpoint: currentModel?.endpoint,
         }),
       })
 
@@ -94,8 +69,6 @@ export function ImageGenerator() {
         url,
         prompt,
         timestamp: new Date(),
-        model: currentModel?.name || selectedModel,
-        blob,
       }
 
       setGeneratedImages((prev) => [newImage, ...prev])
@@ -117,95 +90,17 @@ export function ImageGenerator() {
     }
   }
 
-  const handleDownload = async (image: GeneratedImage, format: "png" | "jpg" | "webp") => {
-    const blob = image.blob
-    if (!blob) return
-
-    const canvas = document.createElement("canvas")
-    const ctx = canvas.getContext("2d")
-    const img = new Image()
-    img.crossOrigin = "anonymous"
-    
-    img.onload = () => {
-      canvas.width = img.width
-      canvas.height = img.height
-      ctx?.drawImage(img, 0, 0)
-      
-      const mimeType = format === "jpg" ? "image/jpeg" : format === "webp" ? "image/webp" : "image/png"
-      const quality = format === "png" ? undefined : 0.92
-      
-      canvas.toBlob((convertedBlob) => {
-        if (convertedBlob) {
-          const url = URL.createObjectURL(convertedBlob)
-          const a = document.createElement("a")
-          a.href = url
-          const safeName = image.prompt.slice(0, 30).replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, "-")
-          a.download = `ai-image-${safeName}-${image.id}.${format}`
-          document.body.appendChild(a)
-          a.click()
-          document.body.removeChild(a)
-          URL.revokeObjectURL(url)
-        }
-      }, mimeType, quality)
-    }
-    
-    img.src = image.url
-  }
-
-  const handleCopyUrl = async (image: GeneratedImage) => {
-    try {
-      await navigator.clipboard.writeText(image.url)
-      setCopiedId(image.id)
-      setTimeout(() => setCopiedId(null), 2000)
-    } catch {
-      // Fallback for older browsers
-      const textArea = document.createElement("textarea")
-      textArea.value = image.url
-      document.body.appendChild(textArea)
-      textArea.select()
-      document.execCommand("copy")
-      document.body.removeChild(textArea)
-      setCopiedId(image.id)
-      setTimeout(() => setCopiedId(null), 2000)
-    }
+  const handleDownload = (url: string, prompt: string) => {
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `ai-image-${prompt.slice(0, 20).replace(/\s+/g, "-")}.png`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
   }
 
   const handleDelete = (id: string) => {
-    setGeneratedImages((prev) => {
-      const image = prev.find(img => img.id === id)
-      if (image?.url) {
-        URL.revokeObjectURL(image.url)
-      }
-      return prev.filter((img) => img.id !== id)
-    })
-  }
-
-  const handleAddModel = () => {
-    if (!newModelName.trim() || !newModelId.trim()) return
-
-    const newModel: AIModel = {
-      id: newModelId,
-      name: newModelName,
-      description: newModelDescription || "自定义模型",
-      provider: newModelEndpoint ? "custom" : "cloudflare",
-      endpoint: newModelEndpoint || undefined,
-    }
-
-    setModels((prev) => [...prev, newModel])
-    setSelectedModel(newModel.id)
-    setIsAddModelOpen(false)
-    setNewModelName("")
-    setNewModelId("")
-    setNewModelEndpoint("")
-    setNewModelDescription("")
-  }
-
-  const handleRemoveModel = (modelId: string) => {
-    if (DEFAULT_MODELS.some(m => m.id === modelId)) return
-    setModels((prev) => prev.filter(m => m.id !== modelId))
-    if (selectedModel === modelId) {
-      setSelectedModel(DEFAULT_MODELS[0].id)
-    }
+    setGeneratedImages((prev) => prev.filter((img) => img.id !== id))
   }
 
   return (
@@ -219,7 +114,7 @@ export function ImageGenerator() {
             </div>
             <div>
               <h1 className="text-lg font-semibold text-foreground">AI 图像生成器</h1>
-              <p className="text-xs text-muted-foreground">支持 Cloudflare AI 及自定义模型</p>
+              <p className="text-xs text-muted-foreground">Powered by Cloudflare AI</p>
             </div>
           </div>
         </div>
@@ -390,89 +285,33 @@ export function ImageGenerator() {
                           alt={image.prompt}
                           className="w-full h-full object-cover"
                         />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                          <div className="absolute bottom-0 left-0 right-0 p-4 space-y-3">
-                            {/* Download Options */}
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-white/70">下载格式:</span>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                className="h-7 px-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white text-xs"
-                                onClick={() => handleDownload(image, "png")}
-                              >
-                                PNG
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                className="h-7 px-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white text-xs"
-                                onClick={() => handleDownload(image, "jpg")}
-                              >
-                                JPG
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                className="h-7 px-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white text-xs"
-                                onClick={() => handleDownload(image, "webp")}
-                              >
-                                WebP
-                              </Button>
-                            </div>
-                            
-                            {/* Action Buttons */}
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white"
-                                  onClick={() => handleCopyUrl(image)}
-                                >
-                                  {copiedId === image.id ? (
-                                    <>
-                                      <Check className="w-4 h-4 mr-1" />
-                                      已复制
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Copy className="w-4 h-4 mr-1" />
-                                      复制链接
-                                    </>
-                                  )}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white"
-                                  onClick={() => window.open(image.url, "_blank")}
-                                >
-                                  <ExternalLink className="w-4 h-4" />
-                                </Button>
-                              </div>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                className="bg-white/20 hover:bg-destructive/80 backdrop-blur-sm text-white"
-                                onClick={() => handleDelete(image.id)}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="absolute bottom-0 left-0 right-0 p-4 flex items-center justify-between">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white"
+                              onClick={() => handleDownload(image.url, image.prompt)}
+                            >
+                              <Download className="w-4 h-4 mr-1" />
+                              下载
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="bg-white/20 hover:bg-destructive/80 backdrop-blur-sm text-white"
+                              onClick={() => handleDelete(image.id)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
                           </div>
                         </div>
                       </div>
                       <CardContent className="py-3">
                         <p className="text-sm text-muted-foreground line-clamp-2">{image.prompt}</p>
-                        <div className="flex items-center justify-between mt-2">
-                          <span className="text-xs text-primary/70 bg-primary/10 px-2 py-0.5 rounded">
-                            {image.model}
-                          </span>
-                          <p className="text-xs text-muted-foreground/50">
-                            {image.timestamp.toLocaleTimeString("zh-CN")}
-                          </p>
-                        </div>
+                        <p className="text-xs text-muted-foreground/50 mt-1">
+                          {image.timestamp.toLocaleTimeString("zh-CN")}
+                        </p>
                       </CardContent>
                     </Card>
                   ))}
@@ -493,123 +332,22 @@ export function ImageGenerator() {
               <CardContent className="space-y-6">
                 {/* Model Selection */}
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm text-muted-foreground">AI 模型</Label>
-                    <Dialog open={isAddModelOpen} onOpenChange={setIsAddModelOpen}>
-                      <DialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-7 text-xs text-primary hover:text-primary">
-                          <Plus className="w-3 h-3 mr-1" />
-                          添加模型
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="bg-card border-border">
-                        <DialogHeader>
-                          <DialogTitle>添加自定义模型</DialogTitle>
-                          <DialogDescription>
-                            添加 Cloudflare AI 模型或自定义外部模型端点
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-4 py-4">
-                          <div className="space-y-2">
-                            <Label>模型名称</Label>
-                            <Input
-                              placeholder="例如: My Custom SDXL"
-                              value={newModelName}
-                              onChange={(e) => setNewModelName(e.target.value)}
-                              className="bg-secondary/30 border-border/50"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>模型 ID</Label>
-                            <Input
-                              placeholder="例如: @cf/stabilityai/stable-diffusion-xl-base-1.0"
-                              value={newModelId}
-                              onChange={(e) => setNewModelId(e.target.value)}
-                              className="bg-secondary/30 border-border/50"
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              Cloudflare 模型使用 @cf/ 前缀
-                            </p>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>自定义端点 (可选)</Label>
-                            <Input
-                              placeholder="https://api.example.com/generate"
-                              value={newModelEndpoint}
-                              onChange={(e) => setNewModelEndpoint(e.target.value)}
-                              className="bg-secondary/30 border-border/50"
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              留空则使用 Cloudflare AI，填写则使用自定义 API
-                            </p>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>描述 (可选)</Label>
-                            <Input
-                              placeholder="模型用途描述"
-                              value={newModelDescription}
-                              onChange={(e) => setNewModelDescription(e.target.value)}
-                              className="bg-secondary/30 border-border/50"
-                            />
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button variant="outline" onClick={() => setIsAddModelOpen(false)}>
-                            取消
-                          </Button>
-                          <Button onClick={handleAddModel} disabled={!newModelName.trim() || !newModelId.trim()}>
-                            添加模型
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
+                  <Label className="text-sm text-muted-foreground">AI 模型</Label>
                   <Select value={selectedModel} onValueChange={setSelectedModel}>
                     <SelectTrigger className="bg-secondary/30 border-border/50">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {models.map((model) => (
+                      {MODELS.map((model) => (
                         <SelectItem key={model.id} value={model.id}>
                           <div className="flex flex-col items-start">
-                            <div className="flex items-center gap-2">
-                              <span>{model.name}</span>
-                              {model.provider === "custom" && (
-                                <span className="text-[10px] bg-accent/50 text-accent-foreground px-1.5 py-0.5 rounded">
-                                  自定义
-                                </span>
-                              )}
-                            </div>
+                            <span>{model.name}</span>
                             <span className="text-xs text-muted-foreground">{model.description}</span>
                           </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  
-                  {/* Custom model management */}
-                  {models.some(m => !DEFAULT_MODELS.some(dm => dm.id === m.id)) && (
-                    <div className="space-y-2 pt-2">
-                      <p className="text-xs text-muted-foreground">已添加的自定义模型:</p>
-                      <div className="space-y-1">
-                        {models
-                          .filter(m => !DEFAULT_MODELS.some(dm => dm.id === m.id))
-                          .map(m => (
-                            <div key={m.id} className="flex items-center justify-between text-xs bg-secondary/30 px-2 py-1.5 rounded">
-                              <span className="text-foreground">{m.name}</span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive"
-                                onClick={() => handleRemoveModel(m.id)}
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </Button>
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {/* Steps */}
