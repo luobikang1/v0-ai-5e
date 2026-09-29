@@ -5,7 +5,6 @@ export const runtime = "edge"
 interface SyncRequest {
   userId: string
   favorites?: any[]
-  history?: any[]
   notes?: any[]
   albums?: any[]
 }
@@ -36,7 +35,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Fetch user favorites
     const favsRes = await db.prepare("SELECT * FROM favorites WHERE user_id = ? ORDER BY created_at DESC").bind(userId).all()
     const notesRes = await db.prepare("SELECT * FROM notes WHERE user_id = ? ORDER BY updated_at DESC").bind(userId).all()
     const albumsRes = await db.prepare("SELECT * FROM albums WHERE user_id = ? ORDER BY created_at DESC").bind(userId).all()
@@ -71,13 +69,12 @@ export async function POST(request: NextRequest) {
 
   try {
     const body: SyncRequest = await request.json()
-    const { userId, favorites, notes, albums } = body
+    const { userId, favorites, notes } = body
 
     if (!userId) {
       return NextResponse.json({ error: "同步失败：缺少用户 ID" }, { status: 400 })
     }
 
-    // Sync Favorites
     if (favorites && Array.isArray(favorites)) {
       for (const item of favorites) {
         await db
@@ -101,7 +98,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Sync Notes
     if (notes && Array.isArray(notes)) {
       for (const note of notes) {
         await db

@@ -11,7 +11,6 @@ interface AuthRequest {
 
 function getD1Binding(): any {
   try {
-    // In @cloudflare/next-on-pages, bindings can be accessed on process.env
     return (process.env as any).DB || null
   } catch {
     return null
@@ -26,7 +25,6 @@ export async function POST(request: NextRequest) {
 
     const db = getD1Binding()
 
-    // Action: Verify Admin Password
     if (action === "verifyAdmin") {
       if (adminPassword && adminPassword === envAdminPassword) {
         return NextResponse.json({
@@ -43,13 +41,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Action: Login
     if (action === "login") {
       if (!username || !password) {
         return NextResponse.json({ error: "请输入用户名和密码" }, { status: 400 })
       }
 
-      // Check if admin password was entered as password
       if (password === envAdminPassword) {
         return NextResponse.json({
           success: true,
@@ -62,7 +58,6 @@ export async function POST(request: NextRequest) {
         })
       }
 
-      // If D1 is bound, check database
       if (db) {
         try {
           const userStmt = db.prepare("SELECT * FROM users WHERE username = ?")
@@ -83,11 +78,9 @@ export async function POST(request: NextRequest) {
           })
         } catch (dbError) {
           console.error("D1 Query Error:", dbError)
-          // Fallback to local mode
         }
       }
 
-      // Without DB / Local storage fallback mode
       return NextResponse.json({
         success: true,
         user: {
@@ -99,7 +92,6 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Action: Register
     if (action === "register") {
       if (!username || !password) {
         return NextResponse.json({ error: "注册时用户名和密码不能为空" }, { status: 400 })
@@ -110,7 +102,6 @@ export async function POST(request: NextRequest) {
 
       if (db) {
         try {
-          // Check existing user
           const existing = await db.prepare("SELECT id FROM users WHERE username = ?").bind(username).first()
           if (existing) {
             return NextResponse.json({ error: "该用户名已被注册" }, { status: 400 })
@@ -135,7 +126,6 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Register without DB (Local Storage mode)
       return NextResponse.json({
         success: true,
         user: {
@@ -147,9 +137,9 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    return NextResponse.json({ error: "无效的请求操作" }, { status: 400 })
+    return NextResponse.json({ error: "无效的操作" }, { status: 400 })
   } catch (error) {
     console.error("Auth route error:", error)
-    return NextResponse.json({ error: "服务器认证出错" }, { status: 500 })
+    return NextResponse.json({ error: "认证功能故障" }, { status: 500 })
   }
 }
