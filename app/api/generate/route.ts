@@ -30,56 +30,77 @@ interface GenerateRequest {
 async function generateWithCloudflare(
   request: GenerateRequest,
   accountId: string,
-  apiToken: string
-): Promise<Response> {
+  apiToken: string,
+  aiBinding?: any
+): Promise<ArrayBuffer> {
   const modelId = request.modelConfig?.endpoint || request.model
-  const apiUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${modelId}`
 
   let body: Record<string, unknown> = {
     prompt: request.prompt,
-    num_steps: request.steps,
+    num_steps: request.steps || 20,
   }
 
-  // Add negative prompt if provided
   if (request.negativePrompt) {
     body.negative_prompt = request.negativePrompt
   }
 
-  // Add image dimensions if provided
   if (request.width && request.height) {
     body.width = request.width
     body.height = request.height
   }
 
-  // Add sampler if provided
   if (request.sampler) {
     body.scheduler = request.sampler
   }
 
   // For image-to-image
   if (request.mode === "image-to-image" && request.sourceImage) {
-    const base64Data = request.sourceImage.split(",")[1]
-    body = {
-      ...body,
-      image: Array.from(Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))),
-      strength: request.strength || 0.75,
-    }
+    const base64Data = request.sourceImage.replace(/^data:image\/\w+;base64,/, "")
+    body.image = Array.from(Uint8Array.from(atob(base64Data), c => c.charCodeAt(0)))
+    body.strength = request.strength || 0.75
   }
 
   // For reference image mode
   if (request.mode === "reference-image" && request.referenceImage) {
-    const base64Data = request.referenceImage.split(",")[1]
-    body = {
-      ...body,
-      image: Array.from(Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))),
-      strength: request.referenceStrength || 0.5,
+    const base64Data = request.referenceImage.replace(/^data:image\/\w+;base64,/, "")
+    body.image = Array.from(Uint8Array.from(atob(base64Data), c => c.charCodeAt(0)))
+    body.strength = request.referenceStrength || 0.5
+  }
+
+  // Try Workers AI Native Binding first if attached
+  if (aiBinding && typeof aiBinding.run === "function") {
+    try {
+      const bindingRes = await aiBinding.run(modelId, body)
+      if (bindingRes instanceof ArrayBuffer) return bindingRes
+      if (bindingRes instanceof ReadableStream) return await new Response(bindingRes).arrayBuffer()
+      if (typeof bindingRes === "object" && bindingRes !== null) {
+        const b64 = bindingRes.image || bindingRes.result?.image
+        if (b64) {
+          const binaryString = atob(b64.replace(/^data:image\/\w+;base64,/, ""))
+          const bytes = new Uint8Array(binaryString.length)
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i)
+          }
+          return bytes.buffer
+        }
+      }
+    } catch (bindErr) {
+      console.warn("Workers AI Binding execute warning, fallback to REST API:", bindErr)
     }
   }
+
+  if (!accountId || !apiToken) {
+    throw new Error("缺少 Cloudflare 配置。请设置 CLOUDFLARE_ACCOUNT_ID 和 CLOUDFLARE_API_TOKEN 环境变量。")
+  }
+
+  const cleanAccountId = accountId.trim()
+  const cleanApiToken = apiToken.trim()
+  const apiUrl = `https://api.cloudflare.com/client/v4/accounts/${cleanAccountId}/ai/run/${modelId}`
 
   const response = await fetch(apiUrl, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${apiToken}`,
+      Authorization: `Bearer ${cleanApiToken}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
@@ -88,10 +109,41 @@ async function generateWithCloudflare(
   if (!response.ok) {
     const errorText = await response.text()
     console.error("Cloudflare AI Error:", errorText)
-    throw new Error(`Cloudflare AI 请求失败: ${response.status}`)
+    let parsedMsg = ""
+    try {
+      const errJson = JSON.parse(errorText)
+      if (errJson.errors && errJson.errors.length > 0) {
+        parsedMsg = errJson.errors.map((e: any) => e.message || e.code).join("; ")
+      }
+    } catch {
+      parsedMsg = errorText
+    }
+    throw new Error(`Cloudflare AI 请求失败 (${response.status}): ${parsedMsg || errorText.slice(0, 200)}`)
   }
 
-  return response
+  const contentType = response.headers.get("content-type") || ""
+
+  if (contentType.includes("application/json")) {
+    const json = await response.json()
+    if (json.success === false) {
+      const msg = json.errors?.map((e: any) => e.message).join("; ") || "Cloudflare AI 生成失败"
+      throw new Error(msg)
+    }
+
+    const b64Image = json.result?.image || json.image || (typeof json.result === "string" ? json.result : null)
+    if (b64Image) {
+      const cleanB64 = b64Image.replace(/^data:image\/\w+;base64,/, "")
+      const binaryString = atob(cleanB64)
+      const bytes = new Uint8Array(binaryString.length)
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i)
+      }
+      return bytes.buffer
+    }
+    throw new Error("Cloudflare AI 响应未能解析为图像数据")
+  }
+
+  return response.arrayBuffer()
 }
 
 async function generateWithOpenAI(
@@ -276,8 +328,25 @@ export async function POST(request: NextRequest) {
     const body: GenerateRequest = await request.json()
     const { modelConfig } = body
 
-    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID
-    const apiToken = process.env.CLOUDFLARE_API_TOKEN
+    const reqEnv = (request as any).env || {}
+
+    const accountId = (
+      process.env.CLOUDFLARE_ACCOUNT_ID ||
+      process.env.NEXT_PUBLIC_CLOUDFLARE_ACCOUNT_ID ||
+      (globalThis as any).CLOUDFLARE_ACCOUNT_ID ||
+      reqEnv.CLOUDFLARE_ACCOUNT_ID ||
+      ""
+    ).trim()
+
+    const apiToken = (
+      process.env.CLOUDFLARE_API_TOKEN ||
+      process.env.NEXT_PUBLIC_CLOUDFLARE_API_TOKEN ||
+      (globalThis as any).CLOUDFLARE_API_TOKEN ||
+      reqEnv.CLOUDFLARE_API_TOKEN ||
+      ""
+    ).trim()
+
+    const aiBinding = reqEnv.AI || (process.env as any).AI || (globalThis as any).AI
 
     let imageData: ArrayBuffer
 
@@ -286,14 +355,7 @@ export async function POST(request: NextRequest) {
 
     switch (modelType) {
       case "cloudflare": {
-        if (!accountId || !apiToken) {
-          return NextResponse.json(
-            { error: "缺少 Cloudflare 配置。请设置 CLOUDFLARE_ACCOUNT_ID 和 CLOUDFLARE_API_TOKEN 环境变量。" },
-            { status: 500 }
-          )
-        }
-        const response = await generateWithCloudflare(body, accountId, apiToken)
-        imageData = await response.arrayBuffer()
+        imageData = await generateWithCloudflare(body, accountId, apiToken, aiBinding)
         break
       }
 
