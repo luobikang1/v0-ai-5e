@@ -2,7 +2,7 @@ export type Language = "zh" | "en" | "ja" | "ko"
 
 export const translations: Record<Language, Record<string, string>> = {
   zh: {
-    // Header
+    // Header & Brand
     title: "白狐",
     subtitle: "AI 图像生成平台",
     history: "历史记录",
@@ -11,11 +11,45 @@ export const translations: Record<Language, Record<string, string>> = {
     models: "模型库",
     spells: "咒语",
     settings: "设置",
+    favorites: "我的收藏",
+    login: "登录",
+    register: "注册",
+    logout: "退出登录",
+    adminLogin: "管理员登录",
+    userAccount: "账号中心",
+
+    // Auth & Sync
+    username: "用户名",
+    password: "密码",
+    adminPassword: "管理员密码",
+    loginSuccess: "登录成功",
+    registerSuccess: "注册成功并已自动登录",
+    syncData: "同步数据",
+    syncing: "正在同步...",
+    syncSuccess: "数据与 D1 数据库同步成功",
+    localMode: "未连接数据库，已以本地免库模式运行",
+    adminModeActive: "当前已进入管理员权限模式",
+    noAccount: "还没有账号？去注册",
+    hasAccount: "已有账号？去登录",
+
+    // Batch generation & dimensions
+    batchCount: "单次生成张数",
+    batch1: "1 张",
+    batch2: "2 张",
+    batch3: "3 张",
+    batch4: "4 张 (上限)",
+    aspectRatio: "宽高比 / 尺寸",
+    aspectSquare: "1:1 正方形",
+    aspectPortrait: "3:4 竖屏人像",
+    aspectLandscape: "4:3 横屏风景",
+    aspectTall: "9:16 手机壁纸",
+    aspectWide: "16:9 电脑宽屏",
+    customDimensions: "自定义宽高",
     
     // Tabs
-    textToImage: "文本生成图像",
-    imageToImage: "图像转换",
-    referenceImage: "参考图生成",
+    textToImage: "文生图",
+    imageToImage: "图生图",
+    referenceImage: "参考图",
     
     // Prompts
     positivePrompt: "正向提示词",
@@ -47,6 +81,8 @@ export const translations: Record<Language, Record<string, string>> = {
     copy: "复制",
     edit: "编辑",
     clear: "清空",
+    favorite: "收藏",
+    unfavorite: "取消收藏",
     
     // Upload
     uploadImage: "上传源图像",
@@ -74,10 +110,13 @@ export const translations: Record<Language, Record<string, string>> = {
     safeContent: "安全内容",
     aiArtifacts: "AI瑕疵",
     
-    // Results
+    // Results & Favorites
     results: "生成结果",
     noImages: "还没有生成任何图像",
     startCreating: "输入提示词并点击生成按钮开始创作",
+    favoritesTitle: "我的收藏",
+    favoritesDesc: "已收藏的高质量图像与提示词（可同步至云端）",
+    noFavorites: "暂无收藏的图像",
     
     // History
     historyTitle: "生成历史 (近30天)",
@@ -138,11 +177,12 @@ export const translations: Record<Language, Record<string, string>> = {
     fantasy: "奇幻",
     scifi: "科幻",
     
-    // Settings
+    // Settings & Themes
     language: "语言",
-    theme: "主题",
+    theme: "主题切换",
     darkMode: "深色模式",
     lightMode: "浅色模式",
+    systemTheme: "跟随系统",
   },
   en: {
     title: "White Fox",
@@ -153,6 +193,38 @@ export const translations: Record<Language, Record<string, string>> = {
     models: "Models",
     spells: "Spells",
     settings: "Settings",
+    favorites: "Favorites",
+    login: "Sign In",
+    register: "Register",
+    logout: "Sign Out",
+    adminLogin: "Admin Login",
+    userAccount: "Account",
+
+    username: "Username",
+    password: "Password",
+    adminPassword: "Admin Password",
+    loginSuccess: "Signed in successfully",
+    registerSuccess: "Registered successfully",
+    syncData: "Sync Data",
+    syncing: "Syncing...",
+    syncSuccess: "Synced successfully with D1 database",
+    localMode: "Running in local storage mode without DB requirement",
+    adminModeActive: "Admin Privileges Activated",
+    noAccount: "No account? Register now",
+    hasAccount: "Already have an account? Sign in",
+
+    batchCount: "Images per batch",
+    batch1: "1 Image",
+    batch2: "2 Images",
+    batch3: "3 Images",
+    batch4: "4 Images (Max)",
+    aspectRatio: "Aspect Ratio / Size",
+    aspectSquare: "1:1 Square",
+    aspectPortrait: "3:4 Portrait",
+    aspectLandscape: "4:3 Landscape",
+    aspectTall: "9:16 Mobile Wallpaper",
+    aspectWide: "16:9 Desktop Wide",
+    customDimensions: "Custom Width & Height",
     
     textToImage: "Text to Image",
     imageToImage: "Image Transform",
@@ -185,6 +257,8 @@ export const translations: Record<Language, Record<string, string>> = {
     copy: "Copy",
     edit: "Edit",
     clear: "Clear",
+    favorite: "Favorite",
+    unfavorite: "Unfavorite",
     
     uploadImage: "Upload Source Image",
     uploadReference: "Upload Reference Image",
@@ -212,6 +286,9 @@ export const translations: Record<Language, Record<string, string>> = {
     results: "Results",
     noImages: "No images generated yet",
     startCreating: "Enter a prompt and click generate to start",
+    favoritesTitle: "My Favorites",
+    favoritesDesc: "Saved images & prompts (Syncable to Cloud)",
+    noFavorites: "No favorited images yet",
     
     historyTitle: "History (Last 30 Days)",
     historyDesc: "View and restore previous generations",
@@ -267,9 +344,10 @@ export const translations: Record<Language, Record<string, string>> = {
     scifi: "Sci-Fi",
     
     language: "Language",
-    theme: "Theme",
+    theme: "Theme Toggle",
     darkMode: "Dark Mode",
     lightMode: "Light Mode",
+    systemTheme: "System Theme",
   },
   ja: {
     title: "白狐",
@@ -280,6 +358,38 @@ export const translations: Record<Language, Record<string, string>> = {
     models: "モデル",
     spells: "呪文",
     settings: "設定",
+    favorites: "お気に入り",
+    login: "ログイン",
+    register: "新規登録",
+    logout: "ログアウト",
+    adminLogin: "管理者ログイン",
+    userAccount: "アカウント",
+
+    username: "ユーザー名",
+    password: "パスワード",
+    adminPassword: "管理者パスワード",
+    loginSuccess: "ログイン成功",
+    registerSuccess: "登録成功",
+    syncData: "データ同期",
+    syncing: "同期中...",
+    syncSuccess: "D1データベースとの同期に成功しました",
+    localMode: "ローカルモードで動作中",
+    adminModeActive: "管理者権限が有効です",
+    noAccount: "アカウントをお持ちでないですか？登録",
+    hasAccount: "既にアカウントをお持ちですか？ログイン",
+
+    batchCount: "1回の生成枚数",
+    batch1: "1 枚",
+    batch2: "2 枚",
+    batch3: "3 枚",
+    batch4: "4 枚 (上限)",
+    aspectRatio: "アスペクト比 / サイズ",
+    aspectSquare: "1:1 正方形",
+    aspectPortrait: "3:4 縦型ポートレート",
+    aspectLandscape: "4:3 横型風景",
+    aspectTall: "9:16 スマホ壁紙",
+    aspectWide: "16:9 PCワイド",
+    customDimensions: "カスタムサイズ",
     
     textToImage: "テキストから画像",
     imageToImage: "画像変換",
@@ -312,6 +422,8 @@ export const translations: Record<Language, Record<string, string>> = {
     copy: "コピー",
     edit: "編集",
     clear: "クリア",
+    favorite: "お気に入り",
+    unfavorite: "解除",
     
     uploadImage: "ソース画像をアップロード",
     uploadReference: "参照画像をアップロード",
@@ -339,6 +451,9 @@ export const translations: Record<Language, Record<string, string>> = {
     results: "結果",
     noImages: "画像はまだ生成されていません",
     startCreating: "プロンプトを入力して生成を開始",
+    favoritesTitle: "お気に入り",
+    favoritesDesc: "保存された画像とプロンプト",
+    noFavorites: "お気に入りの画像はありません",
     
     historyTitle: "履歴（過去30日）",
     historyDesc: "以前の生成を表示・復元",
@@ -394,9 +509,10 @@ export const translations: Record<Language, Record<string, string>> = {
     scifi: "SF",
     
     language: "言語",
-    theme: "テーマ",
+    theme: "テーマ切替",
     darkMode: "ダークモード",
     lightMode: "ライトモード",
+    systemTheme: "システム設定",
   },
   ko: {
     title: "백호",
@@ -407,6 +523,38 @@ export const translations: Record<Language, Record<string, string>> = {
     models: "모델",
     spells: "주문",
     settings: "설정",
+    favorites: "즐겨찾기",
+    login: "로그인",
+    register: "회원가입",
+    logout: "로그아웃",
+    adminLogin: "관리자 로그인",
+    userAccount: "계정",
+
+    username: "사용자 이름",
+    password: "비밀번호",
+    adminPassword: "관리자 비밀번호",
+    loginSuccess: "로그인 성공",
+    registerSuccess: "회원가입 성공",
+    syncData: "데이터 동기화",
+    syncing: "동기화 중...",
+    syncSuccess: "D1 데이터베이스 동기화 완료",
+    localMode: "로컬 모드로 실행 중",
+    adminModeActive: "관리자 권한 활성화됨",
+    noAccount: "계정이 없으신가요? 가입하기",
+    hasAccount: "이미 계정이 있으신가요? 로그인",
+
+    batchCount: "1회 생성 수량",
+    batch1: "1 장",
+    batch2: "2 장",
+    batch3: "3 장",
+    batch4: "4 장 (최대)",
+    aspectRatio: "화면 비율 / 크기",
+    aspectSquare: "1:1 정사각형",
+    aspectPortrait: "3:4 인물 모드",
+    aspectLandscape: "4:3 풍경 모드",
+    aspectTall: "9:16 스마트폰 배경화면",
+    aspectWide: "16:9 와이드 모니터",
+    customDimensions: "사용자 지정 크기",
     
     textToImage: "텍스트를 이미지로",
     imageToImage: "이미지 변환",
@@ -439,6 +587,8 @@ export const translations: Record<Language, Record<string, string>> = {
     copy: "복사",
     edit: "편집",
     clear: "지우기",
+    favorite: "즐겨찾기",
+    unfavorite: "취소",
     
     uploadImage: "소스 이미지 업로드",
     uploadReference: "참조 이미지 업로드",
@@ -466,6 +616,9 @@ export const translations: Record<Language, Record<string, string>> = {
     results: "결과",
     noImages: "아직 생성된 이미지가 없습니다",
     startCreating: "프롬프트를 입력하고 생성을 시작하세요",
+    favoritesTitle: "마이 즐겨찾기",
+    favoritesDesc: "저장된 이미지 및 프롬프트",
+    noFavorites: "즐겨찾기된 이미지가 없습니다",
     
     historyTitle: "기록 (최근 30일)",
     historyDesc: "이전 생성 보기 및 복원",
@@ -521,9 +674,10 @@ export const translations: Record<Language, Record<string, string>> = {
     scifi: "SF",
     
     language: "언어",
-    theme: "테마",
+    theme: "테마 전환",
     darkMode: "다크 모드",
     lightMode: "라이트 모드",
+    systemTheme: "시스템 설정",
   },
 }
 
