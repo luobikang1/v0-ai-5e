@@ -29,65 +29,78 @@ interface GenerateRequest {
 
 async function generateWithCloudflare(
   request: GenerateRequest,
-  accountId: string,
-  apiToken: string
-): Promise<Response> {
+  accountId?: string,
+  apiToken?: string,
+  envAiBinding?: any
+): Promise<Response | ArrayBuffer> {
   const modelId = request.modelConfig?.endpoint || request.model
-  const apiUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${modelId}`
 
-  let body: Record<string, unknown> = {
+  let input: Record<string, unknown> = {
     prompt: request.prompt,
     num_steps: request.steps,
   }
 
-  // Add negative prompt if provided
   if (request.negativePrompt) {
-    body.negative_prompt = request.negativePrompt
+    input.negative_prompt = request.negativePrompt
   }
 
-  // Add image dimensions if provided
   if (request.width && request.height) {
-    body.width = request.width
-    body.height = request.height
+    input.width = request.width
+    input.height = request.height
   }
 
-  // Add sampler if provided
   if (request.sampler) {
-    body.scheduler = request.sampler
+    input.scheduler = request.sampler
   }
 
-  // For image-to-image
   if (request.mode === "image-to-image" && request.sourceImage) {
     const base64Data = request.sourceImage.split(",")[1]
-    body = {
-      ...body,
+    input = {
+      ...input,
       image: Array.from(Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))),
       strength: request.strength || 0.75,
     }
   }
 
-  // For reference image mode
   if (request.mode === "reference-image" && request.referenceImage) {
     const base64Data = request.referenceImage.split(",")[1]
-    body = {
-      ...body,
+    input = {
+      ...input,
       image: Array.from(Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))),
       strength: request.referenceStrength || 0.5,
     }
   }
 
+  // 1. Direct Cloudflare Workers AI binding support
+  if (envAiBinding && typeof envAiBinding.run === "function") {
+    try {
+      const response = await envAiBinding.run(modelId, input)
+      if (response instanceof ReadableStream || response instanceof ArrayBuffer || response instanceof Uint8Array) {
+        return response
+      }
+    } catch (bindErr) {
+      console.warn("Workers AI binding invocation failed, falling back to REST API:", bindErr)
+    }
+  }
+
+  // 2. Fallback to Cloudflare REST API credentials
+  if (!accountId || !apiToken) {
+    throw new Error("缺少 Cloudflare API 凭证或 Workers AI [AI] 绑定")
+  }
+
+  const apiUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${modelId}`
   const response = await fetch(apiUrl, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(input),
   })
 
   if (!response.ok) {
     const errorText = await response.text()
-    console.error("Cloudflare AI Error:", errorText)
+    console.error("Cloudflare AI REST Error:", errorText)
     throw new Error(`Cloudflare AI 请求失败: ${response.status}`)
   }
 
@@ -133,7 +146,6 @@ async function generateWithOpenAI(
     throw new Error("未能获取生成的图像")
   }
 
-  // Convert base64 to ArrayBuffer
   const binaryString = atob(base64Image)
   const bytes = new Uint8Array(binaryString.length)
   for (let i = 0; i < binaryString.length; i++) {
@@ -159,7 +171,6 @@ async function generateWithReplicate(
     },
   }
 
-  // Start prediction
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
@@ -176,8 +187,6 @@ async function generateWithReplicate(
   }
 
   const prediction = await response.json()
-  
-  // Poll for completion
   let result = prediction
   while (result.status !== "succeeded" && result.status !== "failed") {
     await new Promise(resolve => setTimeout(resolve, 1000))
@@ -193,7 +202,6 @@ async function generateWithReplicate(
     throw new Error("Replicate 生成失败")
   }
 
-  // Fetch the image
   const imageUrl = Array.isArray(result.output) ? result.output[0] : result.output
   const imageResponse = await fetch(imageUrl)
   return imageResponse.arrayBuffer()
@@ -241,16 +249,12 @@ async function generateWithCustomAPI(
     throw new Error(`自定义 API 请求失败: ${response.status}`)
   }
 
-  // Check content type
   const contentType = response.headers.get("content-type")
-  
   if (contentType?.includes("application/json")) {
-    // Try to extract image from JSON response
     const data = await response.json()
     const base64Image = data.image || data.data?.[0]?.b64_json || data.output
     
     if (typeof base64Image === "string") {
-      // Handle base64 or URL
       if (base64Image.startsWith("http")) {
         const imageResponse = await fetch(base64Image)
         return imageResponse.arrayBuffer()
@@ -267,7 +271,6 @@ async function generateWithCustomAPI(
     throw new Error("无法解析 API 响应")
   }
 
-  // Assume binary image data
   return response.arrayBuffer()
 }
 
@@ -278,22 +281,24 @@ export async function POST(request: NextRequest) {
 
     const accountId = process.env.CLOUDFLARE_ACCOUNT_ID
     const apiToken = process.env.CLOUDFLARE_API_TOKEN
+    // @ts-ignore
+    const envAiBinding = process.env.AI || (globalThis as any).AI || request.env?.AI
 
     let imageData: ArrayBuffer
 
-    // Determine which API to use based on model config
     const modelType = modelConfig?.type || "cloudflare"
 
     switch (modelType) {
       case "cloudflare": {
-        if (!accountId || !apiToken) {
-          return NextResponse.json(
-            { error: "缺少 Cloudflare 配置。请设置 CLOUDFLARE_ACCOUNT_ID 和 CLOUDFLARE_API_TOKEN 环境变量。" },
-            { status: 500 }
-          )
+        const res = await generateWithCloudflare(body, accountId, apiToken, envAiBinding)
+        if (res instanceof Response) {
+          imageData = await res.arrayBuffer()
+        } else if (res instanceof ArrayBuffer) {
+          imageData = res
+        } else {
+          // Uint8Array or stream
+          imageData = new Uint8Array(res as any).buffer
         }
-        const response = await generateWithCloudflare(body, accountId, apiToken)
-        imageData = await response.arrayBuffer()
         break
       }
 
