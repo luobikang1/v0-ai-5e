@@ -25,6 +25,8 @@ interface GenerateRequest {
   width?: number
   height?: number
   backgroundColor?: string
+  cfAccountId?: string
+  cfApiToken?: string
 }
 
 async function generateWithCloudflare(
@@ -35,8 +37,13 @@ async function generateWithCloudflare(
 ): Promise<ArrayBuffer> {
   const modelId = request.modelConfig?.endpoint || request.model
 
+  let promptText = request.prompt
+  if (request.backgroundColor && request.backgroundColor !== "transparent") {
+    promptText = `${request.prompt}, solid ${request.backgroundColor} background`
+  }
+
   let body: Record<string, unknown> = {
-    prompt: request.prompt,
+    prompt: promptText,
     num_steps: request.steps || 20,
   }
 
@@ -331,6 +338,7 @@ export async function POST(request: NextRequest) {
     const reqEnv = (request as any).env || {}
 
     const accountId = (
+      body.cfAccountId ||
       process.env.CLOUDFLARE_ACCOUNT_ID ||
       process.env.NEXT_PUBLIC_CLOUDFLARE_ACCOUNT_ID ||
       (globalThis as any).CLOUDFLARE_ACCOUNT_ID ||
@@ -339,6 +347,7 @@ export async function POST(request: NextRequest) {
     ).trim()
 
     const apiToken = (
+      body.cfApiToken ||
       process.env.CLOUDFLARE_API_TOKEN ||
       process.env.NEXT_PUBLIC_CLOUDFLARE_API_TOKEN ||
       (globalThis as any).CLOUDFLARE_API_TOKEN ||

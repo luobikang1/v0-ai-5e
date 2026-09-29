@@ -8,7 +8,7 @@ import {
   ChevronDown, ChevronUp, History, Clock, Calendar, Search, Image,
   FileText, FolderPlus, Palette, Languages, Zap, BookMarked, Globe,
   Sun, Moon, Menu, Heart, Star, Shield, User, LogOut, Lock, SlidersHorizontal,
-  Layers, CheckCircle2
+  Layers, KeyRound
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -59,6 +59,7 @@ interface GeneratedImage {
   steps: number
   albumId?: string
   isFavorite?: boolean
+  backgroundColor?: string
 }
 
 interface HistoryRecord {
@@ -258,6 +259,7 @@ const STORAGE_KEYS = {
   language: "whitefox-language",
   user: "whitefox-user",
   favorites: "whitefox-favorites",
+  cfConfig: "whitefox-cf-config",
 }
 
 const HISTORY_MAX_DAYS = 30
@@ -293,6 +295,11 @@ export function ImageGenerator() {
   const [strength, setStrength] = useState([0.75])
   const [referenceStrength, setReferenceStrength] = useState([0.5])
   const [error, setError] = useState<string | null>(null)
+
+  // Cloudflare API Credentials in UI Settings
+  const [cfAccountId, setCfAccountId] = useState("")
+  const [cfApiToken, setCfApiToken] = useState("")
+  const [isCfConfigOpen, setIsCfConfigOpen] = useState(false)
 
   // Mobile menu
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -379,6 +386,14 @@ export function ImageGenerator() {
         setLanguage(savedLang as Language)
       }
 
+      // Cloudflare config
+      const savedCf = localStorage.getItem(STORAGE_KEYS.cfConfig)
+      if (savedCf) {
+        const parsedCf = JSON.parse(savedCf)
+        setCfAccountId(parsedCf.cfAccountId || "")
+        setCfApiToken(parsedCf.cfApiToken || "")
+      }
+
       // User Profile
       const savedUser = localStorage.getItem(STORAGE_KEYS.user)
       if (savedUser) {
@@ -434,6 +449,11 @@ export function ImageGenerator() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.language, language)
   }, [language])
+
+  const saveCfConfig = () => {
+    localStorage.setItem(STORAGE_KEYS.cfConfig, JSON.stringify({ cfAccountId, cfApiToken }))
+    setIsCfConfigOpen(false)
+  }
 
   // Helpers
   const getCurrentDimensions = useCallback(() => {
@@ -545,7 +565,6 @@ export function ImageGenerator() {
         setAuthSuccess(authTab === "login" ? "登录成功！" : "注册成功并自动登录！")
         setTimeout(() => setIsAuthOpen(false), 1000)
       } else {
-        // Fallback for offline/local-first
         const isOfflineAdmin = authPassword === "admin123456"
         const localUser: UserAccount = {
           id: `local-${Date.now()}`,
@@ -559,7 +578,6 @@ export function ImageGenerator() {
         setTimeout(() => setIsAuthOpen(false), 1000)
       }
     } catch {
-      // Offline fallback
       const isOfflineAdmin = authPassword === "admin123456"
       const localUser: UserAccount = {
         id: `local-${Date.now()}`,
@@ -630,6 +648,8 @@ export function ImageGenerator() {
             width,
             height,
             backgroundColor: bgColor,
+            cfAccountId,
+            cfApiToken,
           }),
         })
 
@@ -652,6 +672,7 @@ export function ImageGenerator() {
           height,
           sampler: selectedSampler,
           steps: steps[0],
+          backgroundColor: bgColor,
         }
 
         const reader = new FileReader()
@@ -687,7 +708,7 @@ export function ImageGenerator() {
     }
   }
 
-  const handleDownload = async (url: string, promptText: string, format: string) => {
+  const handleDownload = async (url: string, promptText: string, format: string, bgColor?: string) => {
     const img = new window.Image()
     img.crossOrigin = "anonymous"
     img.onload = () => {
@@ -696,6 +717,10 @@ export function ImageGenerator() {
       canvas.height = img.height
       const ctx = canvas.getContext("2d")
       if (ctx) {
+        if (bgColor && bgColor !== "transparent") {
+          ctx.fillStyle = bgColor
+          ctx.fillRect(0, 0, canvas.width, canvas.height)
+        }
         ctx.drawImage(img, 0, 0)
         const formatInfo = DOWNLOAD_FORMATS.find(f => f.id === format)
         const dataUrl = canvas.toDataURL(formatInfo?.mime || "image/png", 0.95)
@@ -1006,6 +1031,12 @@ export function ImageGenerator() {
               )}
             </Button>
 
+            {/* Cloudflare Token Config Modal Trigger */}
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => setIsCfConfigOpen(true)}>
+              <KeyRound className="w-4 h-4 text-amber-500" />
+              <span>CF 凭证配置</span>
+            </Button>
+
             {/* Spells */}
             <Button variant="outline" size="sm" className="gap-2" onClick={() => setIsSpellsOpen(true)}>
               <Zap className="w-4 h-4" />
@@ -1143,6 +1174,10 @@ export function ImageGenerator() {
             </div>
 
             <div className="grid grid-cols-2 gap-2">
+              <Button variant="outline" size="sm" className="justify-start gap-2" onClick={() => { setIsMobileMenuOpen(false); setIsCfConfigOpen(true) }}>
+                <KeyRound className="w-4 h-4 text-amber-500" />
+                <span>CF 凭证</span>
+              </Button>
               <Button variant="outline" size="sm" className="justify-start gap-2" onClick={() => { setIsMobileMenuOpen(false); setIsSpellsOpen(true) }}>
                 <Zap className="w-4 h-4 text-amber-500" />
                 {t("spells")}
@@ -1465,9 +1500,12 @@ export function ImageGenerator() {
                 <div className="grid sm:grid-cols-2 gap-4">
                   {generatedImages.map((image) => {
                     const favorited = isFavorited(image.id)
+                    const bgStyle = image.backgroundColor && image.backgroundColor !== "transparent"
+                      ? { backgroundColor: image.backgroundColor }
+                      : undefined
                     return (
                       <Card key={image.id} className="bg-card/50 border-border/50 overflow-hidden group shadow-sm transition-all hover:shadow-md">
-                        <div className="relative aspect-square bg-muted/20">
+                        <div className="relative aspect-square bg-muted/20 flex items-center justify-center" style={bgStyle}>
                           <img src={image.url} alt={image.prompt} className="w-full h-full object-cover" />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
                             <div className="absolute bottom-0 left-0 right-0 p-3 space-y-2">
@@ -1478,7 +1516,7 @@ export function ImageGenerator() {
                                     size="sm"
                                     variant="secondary"
                                     className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white text-[10px] h-7 px-2"
-                                    onClick={() => handleDownload(image.url, image.prompt, format.id)}
+                                    onClick={() => handleDownload(image.url, image.prompt, format.id, image.backgroundColor)}
                                   >
                                     <Download className="w-3 h-3 mr-1" />
                                     {format.name}
@@ -1731,6 +1769,49 @@ export function ImageGenerator() {
       </main>
 
       {/* Dialogs */}
+
+      {/* Cloudflare Config Modal */}
+      <Dialog open={isCfConfigOpen} onOpenChange={setIsCfConfigOpen}>
+        <DialogContent className="max-w-sm sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="w-5 h-5 text-amber-500" />
+              Cloudflare 凭证配置
+            </DialogTitle>
+            <DialogDescription>
+              可在此直接设置 Cloudflare Account ID 和 API Token，无需依赖部署后台环境变量。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Cloudflare Account ID</Label>
+              <Input
+                placeholder="例如: abc123def456..."
+                value={cfAccountId}
+                onChange={(e) => setCfAccountId(e.target.value)}
+                className="bg-secondary/30 border-border/50 text-xs font-mono"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Cloudflare API Token</Label>
+              <Input
+                type="password"
+                placeholder="包含 Workers AI 读写权限的 API Token"
+                value={cfApiToken}
+                onChange={(e) => setCfApiToken(e.target.value)}
+                className="bg-secondary/30 border-border/50 text-xs font-mono"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button size="sm" onClick={saveCfConfig} className="w-full">
+              保存 Cloudflare 凭证
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Auth / Admin Login Dialog */}
       <Dialog open={isAuthOpen} onOpenChange={setIsAuthOpen}>
