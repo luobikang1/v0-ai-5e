@@ -11,7 +11,7 @@ interface AuthRequest {
 
 function getD1Binding(): any {
   try {
-    return (process.env as any).DB || null
+    return (process.env as any)?.DB || (globalThis as any)?.DB || null
   } catch {
     return null
   }
