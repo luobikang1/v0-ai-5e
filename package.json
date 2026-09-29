@@ -2,9 +2,16 @@
   "name": "my-project",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "pages:build": "next-on-pages",
+    "preview": "pnpm run pages:build && wrangler pages dev .vercel/output/static",
+    "deploy": "pnpm run pages:build && wrangler pages deploy .vercel/output/static",
     "start": "next start",
     "lint": "eslint ."
   },
@@ -68,6 +75,7 @@
     "postcss": "^8.5",
     "tailwindcss": "^4.2.0",
     "tw-animate-css": "1.3.3",
-    "typescript": "5.7.3"
+    "typescript": "5.7.3",
+    "wrangler": "^3.114.0"
   }
 }
