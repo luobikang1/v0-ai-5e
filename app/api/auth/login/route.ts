@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server"
 
 export const runtime = "edge"
 
-// Simple hash function for client/local demo authentication compatibility
 async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder()
   const data = encoder.encode(password + "whitefox_salt_2025")
@@ -20,10 +19,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "密码不能为空" }, { status: 400 })
     }
 
-    // Check admin login
-    const adminEnvPassword = process.env.ADMIN_PASSWORD || process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "admin123"
+    // Check admin login via server-only env variable
+    const adminEnvPassword = process.env.ADMIN_PASSWORD
 
     if (isAdmin) {
+      if (!adminEnvPassword) {
+        return NextResponse.json({ error: "未设置 ADMIN_PASSWORD 部署环境变量，无法进入管理员模式" }, { status: 403 })
+      }
       if (password === adminEnvPassword) {
         return NextResponse.json({
           success: true,
@@ -72,7 +74,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Fallback: Local offline mode (without database requirement)
-    // Validate hashed password or allow local login session creation
     const userId = "local_" + btoa(username).replace(/[^a-zA-Z0-9]/g, "").slice(0, 12)
     return NextResponse.json({
       success: true,
