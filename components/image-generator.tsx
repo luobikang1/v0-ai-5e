@@ -8,7 +8,7 @@ import {
   ChevronDown, ChevronUp, History, Clock, Calendar, Search, Image,
   FileText, FolderPlus, Palette, Languages, Zap, BookMarked, Globe,
   Sun, Moon, Menu, Heart, Star, Shield, User, LogOut, Lock, SlidersHorizontal,
-  Layers, KeyRound
+  Layers, KeyRound, CheckSquare, Square, RefreshCw, Camera, Tv, Film, Box, Grid, Smile
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -53,6 +53,7 @@ interface GeneratedImage {
   negativePrompt: string
   timestamp: Date
   model: string
+  modelId: string
   width: number
   height: number
   sampler: string
@@ -60,6 +61,7 @@ interface GeneratedImage {
   albumId?: string
   isFavorite?: boolean
   backgroundColor?: string
+  stylePreset?: string
 }
 
 interface HistoryRecord {
@@ -68,11 +70,14 @@ interface HistoryRecord {
   negativePrompt: string
   timestamp: string
   model: string
+  modelId?: string
   width: number
   height: number
   sampler: string
   steps: number
   imageData?: string
+  backgroundColor?: string
+  stylePreset?: string
 }
 
 interface NegativePromptPreset {
@@ -90,6 +95,7 @@ interface CustomModel {
   type: "cloudflare" | "openai" | "replicate" | "custom"
   description?: string
   tags?: string[]
+  coverUrl?: string
 }
 
 interface PromptNote {
@@ -143,19 +149,103 @@ interface AspectRatioOption {
   ratioLabel: string
 }
 
+interface StylePreset {
+  id: string
+  name: string
+  promptModifier: string
+  negativeModifier: string
+  coverUrl: string
+}
+
 // Constants
 const DEFAULT_MODELS: CustomModel[] = [
-  { id: "@cf/stabilityai/stable-diffusion-xl-base-1.0", name: "Stable Diffusion XL", endpoint: "", apiKeyEnvVar: "", type: "cloudflare", description: "高质量图像生成基础模型", tags: ["stable-diffusion", "基础"] },
-  { id: "@cf/lykon/dreamshaper-8-lcm", name: "DreamShaper 8 LCM", endpoint: "", apiKeyEnvVar: "", type: "cloudflare", description: "快速梦幻风格生成", tags: ["快速", "梦幻"] },
-  { id: "@cf/bytedance/stable-diffusion-xl-lightning", name: "SDXL Lightning", endpoint: "", apiKeyEnvVar: "", type: "cloudflare", description: "闪电般快速的 SDXL", tags: ["快速", "SDXL"] },
+  {
+    id: "@cf/stabilityai/stable-diffusion-xl-base-1.0",
+    name: "Stable Diffusion XL",
+    endpoint: "",
+    apiKeyEnvVar: "",
+    type: "cloudflare",
+    description: "高质量通用图像生成基础模型，画质细腻逼真",
+    tags: ["SDXL", "高画质", "推荐"],
+    coverUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&q=80",
+  },
+  {
+    id: "@cf/lykon/dreamshaper-8-lcm",
+    name: "DreamShaper 8 LCM",
+    endpoint: "",
+    apiKeyEnvVar: "",
+    type: "cloudflare",
+    description: "快速梦幻艺术风格生成，色彩绚丽生动",
+    tags: ["快速", "梦幻", "插画"],
+    coverUrl: "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=400&q=80",
+  },
+  {
+    id: "@cf/bytedance/stable-diffusion-xl-lightning",
+    name: "SDXL Lightning",
+    endpoint: "",
+    apiKeyEnvVar: "",
+    type: "cloudflare",
+    description: "字节跳动极速 SDXL 模型，1-4步秒级高帧率成图",
+    tags: ["极速", "SDXL", "高效率"],
+    coverUrl: "https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?w=400&q=80",
+  },
 ]
 
 const SEARCHABLE_MODELS: CustomModel[] = [
   ...DEFAULT_MODELS,
-  { id: "@cf/runwayml/stable-diffusion-v1-5", name: "Stable Diffusion 1.5", endpoint: "", apiKeyEnvVar: "", type: "cloudflare", description: "经典 SD 1.5 模型", tags: ["经典", "stable-diffusion"] },
-  { id: "@cf/stabilityai/stable-diffusion-xl-turbo", name: "SDXL Turbo", endpoint: "", apiKeyEnvVar: "", type: "cloudflare", description: "涡轮增压的 SDXL", tags: ["快速", "SDXL"] },
-  { id: "dall-e-3", name: "DALL-E 3", endpoint: "https://api.openai.com/v1/images/generations", apiKeyEnvVar: "OPENAI_API_KEY", type: "openai", description: "OpenAI 最新图像模型", tags: ["OpenAI", "高质量"] },
-  { id: "stability-ai/sdxl", name: "SDXL (Replicate)", endpoint: "https://api.replicate.com/v1/predictions", apiKeyEnvVar: "REPLICATE_API_TOKEN", type: "replicate", description: "Replicate 上的 SDXL", tags: ["Replicate", "SDXL"] },
+  {
+    id: "@cf/runwayml/stable-diffusion-v1-5",
+    name: "Stable Diffusion 1.5",
+    endpoint: "",
+    apiKeyEnvVar: "",
+    type: "cloudflare",
+    description: "经典 SD 1.5 图像模型，艺术风格兼容性强",
+    tags: ["经典", "SD1.5"],
+    coverUrl: "https://images.unsplash.com/photo-1541701494587-cb58502866ab?w=400&q=80",
+  },
+  {
+    id: "@cf/stabilityai/stable-diffusion-xl-turbo",
+    name: "SDXL Turbo",
+    endpoint: "",
+    apiKeyEnvVar: "",
+    type: "cloudflare",
+    description: "涡轮增压 SDXL 模型，单步实时流畅成图",
+    tags: ["实时", "SDXL"],
+    coverUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&q=80",
+  },
+  {
+    id: "dall-e-3",
+    name: "DALL-E 3",
+    endpoint: "https://api.openai.com/v1/images/generations",
+    apiKeyEnvVar: "OPENAI_API_KEY",
+    type: "openai",
+    description: "OpenAI 旗舰 AI 绘图模型，精准理解复杂文字语义",
+    tags: ["OpenAI", "旗舰", "语义理解"],
+    coverUrl: "https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?w=400&q=80",
+  },
+  {
+    id: "stability-ai/sdxl",
+    name: "SDXL (Replicate)",
+    endpoint: "https://api.replicate.com/v1/predictions",
+    apiKeyEnvVar: "REPLICATE_API_TOKEN",
+    type: "replicate",
+    description: "Replicate 云端高精度 SDXL 生产渲染",
+    tags: ["Replicate", "云端"],
+    coverUrl: "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=400&q=80",
+  },
+]
+
+const STYLE_PRESETS: StylePreset[] = [
+  { id: "none", name: "无风格", promptModifier: "", negativeModifier: "", coverUrl: "" },
+  { id: "photorealistic", name: "写实逼真", promptModifier: ", professional 8k photograph, sharp focus, ultra realistic, studio lighting, highly detailed", negativeModifier: ", cartoon, anime, drawing, painting, 3d render", coverUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80" },
+  { id: "anime", name: "动漫二次元", promptModifier: ", anime style, vibrant colors, detailed illustration, dynamic lighting, studio ghibli aesthetic", negativeModifier: ", realistic, photo, 3d render", coverUrl: "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=200&q=80" },
+  { id: "cyberpunk", name: "赛博朋克", promptModifier: ", cyberpunk aesthetic, neon glow, futuristic city, cinematic lighting, octane render, 8k", negativeModifier: ", medieval, rural, pastel", coverUrl: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=200&q=80" },
+  { id: "watercolor", name: "水彩插画", promptModifier: ", soft watercolor painting, elegant ink washes, textured paper, artistic brush strokes, masterpiece", negativeModifier: ", photo, 3d, realistic", coverUrl: "https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=200&q=80" },
+  { id: "oil", name: "古典油画", promptModifier: ", classical oil painting, rich impasto texture, dramatic chiaroscuro lighting, museum quality", negativeModifier: ", photo, digital, cartoon", coverUrl: "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=200&q=80" },
+  { id: "cinematic", name: "胶片电影", promptModifier: ", 35mm film photograph, cinematic shot, anamorphic lens flare, movie scene, depth of field, color graded", negativeModifier: ", CG, 3d, drawing", coverUrl: "https://images.unsplash.com/photo-1485846234645-a62644f84728?w=200&q=80" },
+  { id: "3d", name: "3D 渲染", promptModifier: ", 3D Pixar style render, Octane render, ray tracing, cute volumetric lighting, smooth 3d model", negativeModifier: ", flat 2d, sketch, photo", coverUrl: "https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?w=200&q=80" },
+  { id: "pixel", name: "像素艺术", promptModifier: ", 16-bit pixel art, retro video game style, pixelated detail, nostalgia", negativeModifier: ", smooth, high res photo, 3d", coverUrl: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=200&q=80" },
+  { id: "clay", name: "粘土材质", promptModifier: ", claymation style, stop motion plasticine, tactile clay texture, handcrafted sculpture", negativeModifier: ", photo, digital drawing", coverUrl: "https://images.unsplash.com/photo-1563089145-599997674d42?w=200&q=80" },
 ]
 
 const DEFAULT_SPELLS: Spell[] = [
@@ -283,6 +373,7 @@ export function ImageGenerator() {
   const [prompt, setPrompt] = useState("")
   const [negativePrompt, setNegativePrompt] = useState("")
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODELS[0].id)
+  const [selectedStyle, setSelectedStyle] = useState("none")
   const [models, setModels] = useState<CustomModel[]>(DEFAULT_MODELS)
   const [steps, setSteps] = useState([20])
   const [batchCount, setBatchCount] = useState<number>(1)
@@ -296,7 +387,10 @@ export function ImageGenerator() {
   const [referenceStrength, setReferenceStrength] = useState([0.5])
   const [error, setError] = useState<string | null>(null)
 
-  // Cloudflare API Credentials in UI Settings
+  // Toast / Status Message
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
+
+  // Cloudflare API Credentials
   const [cfAccountId, setCfAccountId] = useState("")
   const [cfApiToken, setCfApiToken] = useState("")
   const [isCfConfigOpen, setIsCfConfigOpen] = useState(false)
@@ -307,8 +401,8 @@ export function ImageGenerator() {
   // Sampling and aspect ratio
   const [selectedSampler, setSelectedSampler] = useState("euler_a")
   const [selectedAspectRatio, setSelectedAspectRatio] = useState("1:1")
-  const [customWidth, setCustomWidth] = useState(512)
-  const [customHeight, setCustomHeight] = useState(512)
+  const [customWidthInput, setCustomWidthInput] = useState("512")
+  const [customHeightInput, setCustomHeightInput] = useState("512")
 
   // Background color
   const [selectedBgColor, setSelectedBgColor] = useState("transparent")
@@ -316,6 +410,7 @@ export function ImageGenerator() {
 
   // User auth & Favorites
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null)
+  const [hasAdminPassword, setHasAdminPassword] = useState(false)
   const [favorites, setFavorites] = useState<FavoriteItem[]>([])
   const [isAuthOpen, setIsAuthOpen] = useState(false)
   const [isFavoritesOpen, setIsFavoritesOpen] = useState(false)
@@ -326,9 +421,10 @@ export function ImageGenerator() {
   const [authError, setAuthError] = useState<string | null>(null)
   const [authSuccess, setAuthSuccess] = useState<string | null>(null)
 
-  // History
+  // History & Batch History
   const [historyRecords, setHistoryRecords] = useState<HistoryRecord[]>([])
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
+  const [selectedHistoryIds, setSelectedHistoryIds] = useState<string[]>([])
 
   // Notes
   const [notes, setNotes] = useState<PromptNote[]>([])
@@ -374,8 +470,26 @@ export function ImageGenerator() {
   const [newPresetName, setNewPresetName] = useState("")
   const [newPresetPrompts, setNewPresetPrompts] = useState("")
 
-  // Download
+  // Download state
   const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  // Toast notification helper
+  const showToast = (msg: string) => {
+    setToastMessage(msg)
+    setTimeout(() => setToastMessage(null), 3000)
+  }
+
+  // Check admin status on load
+  useEffect(() => {
+    fetch("/api/auth")
+      .then(res => res.json())
+      .then(data => {
+        if (data.hasAdminPassword) {
+          setHasAdminPassword(true)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   // Load data from localStorage
   useEffect(() => {
@@ -453,16 +567,25 @@ export function ImageGenerator() {
   const saveCfConfig = () => {
     localStorage.setItem(STORAGE_KEYS.cfConfig, JSON.stringify({ cfAccountId, cfApiToken }))
     setIsCfConfigOpen(false)
+    showToast("Cloudflare 凭证保存成功！")
   }
 
-  // Helpers
+  // Dimension helpers
+  const getParsedCustomDimensions = useCallback(() => {
+    let w = parseInt(customWidthInput) || 512
+    let h = parseInt(customHeightInput) || 512
+    w = Math.min(2048, Math.max(128, w))
+    h = Math.min(2048, Math.max(128, h))
+    return { width: w, height: h }
+  }, [customWidthInput, customHeightInput])
+
   const getCurrentDimensions = useCallback(() => {
     if (selectedAspectRatio === "custom") {
-      return { width: customWidth, height: customHeight }
+      return getParsedCustomDimensions()
     }
     const ratioOpt = ASPECT_RATIOS.find(r => r.id === selectedAspectRatio)
     return { width: ratioOpt?.width || 1024, height: ratioOpt?.height || 1024 }
-  }, [selectedAspectRatio, customWidth, customHeight])
+  }, [selectedAspectRatio, getParsedCustomDimensions])
 
   const buildNegativePrompt = useCallback(() => {
     if (!useNegativePrompt) return ""
@@ -471,11 +594,27 @@ export function ImageGenerator() {
       return preset ? preset.prompts : []
     })
     const allPrompts = [...presetPrompts, ...customNegativePrompts]
+
+    // Append style negative modifier if selected
+    const styleObj = STYLE_PRESETS.find(s => s.id === selectedStyle)
+    if (styleObj?.negativeModifier) {
+      allPrompts.push(styleObj.negativeModifier)
+    }
+
     if (negativePrompt.trim()) {
       allPrompts.push(negativePrompt.trim())
     }
     return [...new Set(allPrompts)].join(", ")
-  }, [selectedPresets, customNegativePrompts, negativePrompt, negativePresets, useNegativePrompt])
+  }, [selectedPresets, customNegativePrompts, negativePrompt, negativePresets, useNegativePrompt, selectedStyle])
+
+  const buildPositivePrompt = useCallback(() => {
+    let finalPrompt = prompt.trim()
+    const styleObj = STYLE_PRESETS.find(s => s.id === selectedStyle)
+    if (styleObj?.promptModifier) {
+      finalPrompt += styleObj.promptModifier
+    }
+    return finalPrompt
+  }, [prompt, selectedStyle])
 
   const getCurrentBgColor = useCallback(() => {
     return selectedBgColor === "custom" ? customBgColor : BACKGROUND_COLORS.find(c => c.id === selectedBgColor)?.value || "transparent"
@@ -488,11 +627,14 @@ export function ImageGenerator() {
       negativePrompt: image.negativePrompt,
       timestamp: image.timestamp.toISOString(),
       model: image.model,
+      modelId: image.modelId,
       width: image.width,
       height: image.height,
       sampler: image.sampler,
       steps: image.steps,
-      imageData,
+      imageData: imageData || image.url,
+      backgroundColor: image.backgroundColor,
+      stylePreset: image.stylePreset,
     }
     setHistoryRecords(prev => {
       const updated = [record, ...prev].slice(0, 100)
@@ -565,11 +707,10 @@ export function ImageGenerator() {
         setAuthSuccess(authTab === "login" ? "登录成功！" : "注册成功并自动登录！")
         setTimeout(() => setIsAuthOpen(false), 1000)
       } else {
-        const isOfflineAdmin = authPassword === "admin123456"
         const localUser: UserAccount = {
           id: `local-${Date.now()}`,
-          username: isOfflineAdmin ? `${authUsername.trim()} (管理员)` : authUsername.trim(),
-          isAdmin: isOfflineAdmin,
+          username: authUsername.trim(),
+          isAdmin: false,
           storageMode: "local",
         }
         setCurrentUser(localUser)
@@ -578,11 +719,10 @@ export function ImageGenerator() {
         setTimeout(() => setIsAuthOpen(false), 1000)
       }
     } catch {
-      const isOfflineAdmin = authPassword === "admin123456"
       const localUser: UserAccount = {
         id: `local-${Date.now()}`,
-        username: isOfflineAdmin ? `${authUsername.trim()} (管理员)` : authUsername.trim(),
-        isAdmin: isOfflineAdmin,
+        username: authUsername.trim(),
+        isAdmin: false,
         storageMode: "local",
       }
       setCurrentUser(localUser)
@@ -609,6 +749,29 @@ export function ImageGenerator() {
 
   const isFavorited = (id: string) => favorites.some(f => f.id === id)
 
+  // Import parameters from image or history
+  const importParameters = (targetPrompt: string, targetNegative?: string, targetModelId?: string, targetWidth?: number, targetHeight?: number, targetSampler?: string, targetSteps?: number) => {
+    setPrompt(targetPrompt)
+    if (targetNegative) setNegativePrompt(targetNegative)
+    if (targetModelId && models.some(m => m.id === targetModelId)) {
+      setSelectedModel(targetModelId)
+    }
+    if (targetSampler) setSelectedSampler(targetSampler)
+    if (targetSteps) setSteps([Math.min(50, Math.max(1, targetSteps))])
+
+    if (targetWidth && targetHeight) {
+      const matched = ASPECT_RATIOS.find(r => r.width === targetWidth && r.height === targetHeight)
+      if (matched) {
+        setSelectedAspectRatio(matched.id)
+      } else {
+        setSelectedAspectRatio("custom")
+        setCustomWidthInput(targetWidth.toString())
+        setCustomHeightInput(targetHeight.toString())
+      }
+    }
+    showToast("已成功导入绘图参数！")
+  }
+
   // Generation handler (supports 1 - 4 batch generation)
   const handleGenerate = async () => {
     if (!prompt.trim()) return
@@ -617,10 +780,14 @@ export function ImageGenerator() {
     setError(null)
     setGeneratingProgress(null)
 
+    const finalPositivePrompt = buildPositivePrompt()
     const finalNegativePrompt = buildNegativePrompt()
     const currentModel = models.find(m => m.id === selectedModel)
     const { width, height } = getCurrentDimensions()
     const bgColor = getCurrentBgColor()
+
+    // Clamp steps <= 50 to prevent crash
+    const safeSteps = Math.min(50, Math.max(1, steps[0]))
 
     const newGenerated: GeneratedImage[] = []
 
@@ -634,11 +801,11 @@ export function ImageGenerator() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            prompt,
+            prompt: finalPositivePrompt,
             negativePrompt: finalNegativePrompt,
             model: selectedModel,
             modelConfig: currentModel,
-            steps: steps[0],
+            steps: safeSteps,
             mode: activeTab,
             sourceImage: uploadedImage,
             referenceImage: referenceImage,
@@ -661,22 +828,25 @@ export function ImageGenerator() {
         const blob = await response.blob()
         const url = URL.createObjectURL(blob)
 
+        const reader = new FileReader()
+        reader.readAsDataURL(blob)
+
         const newImage: GeneratedImage = {
           id: `${Date.now()}-${i}`,
           url,
-          prompt,
+          prompt: finalPositivePrompt,
           negativePrompt: finalNegativePrompt,
           timestamp: new Date(),
           model: currentModel?.name || selectedModel,
+          modelId: selectedModel,
           width,
           height,
           sampler: selectedSampler,
-          steps: steps[0],
+          steps: safeSteps,
           backgroundColor: bgColor,
+          stylePreset: selectedStyle,
         }
 
-        const reader = new FileReader()
-        reader.readAsDataURL(blob)
         reader.onloadend = () => {
           saveToHistory(newImage, reader.result as string)
         }
@@ -708,31 +878,48 @@ export function ImageGenerator() {
     }
   }
 
-  const handleDownload = async (url: string, promptText: string, format: string, bgColor?: string) => {
-    const img = new window.Image()
-    img.crossOrigin = "anonymous"
-    img.onload = () => {
+  // Download handler
+  const handleDownload = async (url: string, promptText: string, format: string = "png", bgColor?: string) => {
+    try {
+      const formatInfo = DOWNLOAD_FORMATS.find(f => f.id === format) || DOWNLOAD_FORMATS[0]
+      const img = new window.Image()
+      img.crossOrigin = "anonymous"
+
+      await new Promise((resolve, reject) => {
+        img.onload = resolve
+        img.onerror = reject
+        img.src = url
+      })
+
       const canvas = document.createElement("canvas")
-      canvas.width = img.width
-      canvas.height = img.height
+      canvas.width = img.naturalWidth || img.width || 1024
+      canvas.height = img.naturalHeight || img.height || 1024
       const ctx = canvas.getContext("2d")
+
       if (ctx) {
         if (bgColor && bgColor !== "transparent") {
           ctx.fillStyle = bgColor
           ctx.fillRect(0, 0, canvas.width, canvas.height)
         }
         ctx.drawImage(img, 0, 0)
-        const formatInfo = DOWNLOAD_FORMATS.find(f => f.id === format)
-        const dataUrl = canvas.toDataURL(formatInfo?.mime || "image/png", 0.95)
+        const dataUrl = canvas.toDataURL(formatInfo.mime, 0.95)
         const a = document.createElement("a")
         a.href = dataUrl
         a.download = `whitefox-${promptText.slice(0, 20).replace(/\s+/g, "-")}.${format}`
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
+        return
       }
+    } catch {
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `whitefox-${promptText.slice(0, 20).replace(/\s+/g, "-")}.${format}`
+      a.target = "_blank"
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
     }
-    img.src = url
   }
 
   const handleCopyUrl = async (url: string, id: string) => {
@@ -945,20 +1132,42 @@ export function ImageGenerator() {
     }
   }
 
-  // History handlers
-  const restoreFromHistory = (record: HistoryRecord) => {
-    setPrompt(record.prompt)
-    setNegativePrompt(record.negativePrompt)
-    setSelectedSampler(record.sampler)
-    setSteps([record.steps])
-    const matchingRatio = ASPECT_RATIOS.find(s => s.width === record.width && s.height === record.height)
-    if (matchingRatio) {
-      setSelectedAspectRatio(matchingRatio.id)
+  // History handlers & Batch Management
+  const toggleSelectHistory = (id: string) => {
+    setSelectedHistoryIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    )
+  }
+
+  const selectAllHistory = () => {
+    if (selectedHistoryIds.length === historyRecords.length) {
+      setSelectedHistoryIds([])
     } else {
-      setSelectedAspectRatio("custom")
-      setCustomWidth(record.width)
-      setCustomHeight(record.height)
+      setSelectedHistoryIds(historyRecords.map(r => r.id))
     }
+  }
+
+  const batchDeleteHistory = () => {
+    if (selectedHistoryIds.length === 0) return
+    setHistoryRecords(prev => {
+      const updated = prev.filter(r => !selectedHistoryIds.includes(r.id))
+      localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(updated))
+      return updated
+    })
+    setSelectedHistoryIds([])
+    showToast("已成功批量删除记录！")
+  }
+
+  const restoreFromHistory = (record: HistoryRecord) => {
+    importParameters(
+      record.prompt,
+      record.negativePrompt,
+      record.modelId,
+      record.width,
+      record.height,
+      record.sampler,
+      record.steps
+    )
     setIsHistoryOpen(false)
   }
 
@@ -975,7 +1184,15 @@ export function ImageGenerator() {
   const currentNegativePromptPreview = buildNegativePrompt()
 
   return (
-    <div className="min-h-screen bg-background text-foreground transition-colors duration-200">
+    <div className="min-h-screen bg-background text-foreground transition-colors duration-200 relative">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-primary text-primary-foreground text-xs px-4 py-2.5 rounded-lg shadow-xl font-medium animate-in fade-in slide-in-from-bottom-2 flex items-center gap-2">
+          <Sparkles className="w-4 h-4" />
+          {toastMessage}
+        </div>
+      )}
+
       {/* Header */}
       <header className="border-b border-border/50 bg-card/60 backdrop-blur-md sticky top-0 z-50">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
@@ -1214,6 +1431,48 @@ export function ImageGenerator() {
         <div className="grid lg:grid-cols-[1fr_380px] gap-8">
           {/* Main Content Area */}
           <div className="space-y-6">
+            {/* Art Styles Selection Grid (艺术风格选择) */}
+            <Card className="bg-card/50 border-border/50 shadow-sm">
+              <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Palette className="w-4 h-4 text-primary" />
+                  {t("styles")}
+                </CardTitle>
+                {selectedStyle !== "none" && (
+                  <Button variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground" onClick={() => setSelectedStyle("none")}>
+                    {t("styleNone")}
+                  </Button>
+                )}
+              </CardHeader>
+              <CardContent className="pt-0">
+                <ScrollArea className="w-full whitespace-nowrap pb-2">
+                  <div className="flex gap-2">
+                    {STYLE_PRESETS.map(style => (
+                      <button
+                        key={style.id}
+                        type="button"
+                        className={cn(
+                          "relative group flex-shrink-0 w-24 h-16 rounded-lg overflow-hidden border-2 transition-all flex flex-col justify-end p-1.5 text-left",
+                          selectedStyle === style.id ? "border-primary ring-2 ring-primary/40" : "border-border/40 hover:border-primary/50"
+                        )}
+                        onClick={() => setSelectedStyle(style.id)}
+                      >
+                        {style.coverUrl ? (
+                          <img src={style.coverUrl} alt={style.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                        ) : (
+                          <div className="absolute inset-0 bg-secondary/50 flex items-center justify-center">
+                            <Sparkles className="w-5 h-5 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                        <span className="relative text-[11px] font-medium text-white truncate z-10">{style.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+
             {/* Tabs (Mode Selection) */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-3 bg-secondary/50 p-1">
@@ -1544,6 +1803,18 @@ export function ImageGenerator() {
                                   >
                                     <Star className={cn("w-4 h-4", favorited && "fill-white")} />
                                   </Button>
+
+                                  {/* 1-Click Import Parameters */}
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white h-8 w-8 p-0"
+                                    onClick={() => importParameters(image.prompt, image.negativePrompt, image.modelId, image.width, image.height, image.sampler, image.steps)}
+                                    title={t("importParams")}
+                                  >
+                                    <RefreshCw className="w-4 h-4" />
+                                  </Button>
+
                                   <Button size="sm" variant="secondary" className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white h-8 w-8 p-0" onClick={() => handleCopyUrl(image.url, image.id)}>
                                     {copiedId === image.id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                                   </Button>
@@ -1552,22 +1823,6 @@ export function ImageGenerator() {
                                       <ExternalLink className="w-4 h-4" />
                                     </Button>
                                   </a>
-                                  {albums.length > 0 && (
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger asChild>
-                                        <Button size="sm" variant="secondary" className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white h-8 w-8 p-0">
-                                          <FolderPlus className="w-4 h-4" />
-                                        </Button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent>
-                                        {albums.map(album => (
-                                          <DropdownMenuItem key={album.id} onClick={() => addToAlbum(image.id, album.id)}>
-                                            {album.name}
-                                          </DropdownMenuItem>
-                                        ))}
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
-                                  )}
                                 </div>
                                 <Button size="sm" variant="secondary" className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white h-8 w-8 p-0" onClick={() => setGeneratedImages(prev => prev.filter(img => img.id !== image.id))}>
                                   <Trash2 className="w-4 h-4" />
@@ -1650,28 +1905,53 @@ export function ImageGenerator() {
                   </div>
 
                   {selectedAspectRatio === "custom" && (
-                    <div className="grid grid-cols-2 gap-2 pt-2">
-                      <div className="space-y-1">
-                        <Label className="text-[10px] text-muted-foreground">{t("width")}</Label>
-                        <Input
-                          type="number"
-                          value={customWidth}
-                          onChange={(e) => setCustomWidth(Math.min(2048, Math.max(256, parseInt(e.target.value) || 512)))}
-                          min={256}
-                          max={2048}
-                          className="bg-secondary/30 border-border/50 text-xs h-8 font-mono"
-                        />
+                    <div className="space-y-2 pt-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">{t("width")}</Label>
+                          <Input
+                            type="number"
+                            value={customWidthInput}
+                            onChange={(e) => setCustomWidthInput(e.target.value)}
+                            onBlur={() => {
+                              let val = parseInt(customWidthInput) || 512
+                              val = Math.min(2048, Math.max(128, val))
+                              setCustomWidthInput(val.toString())
+                            }}
+                            className="bg-secondary/30 border-border/50 text-xs h-8 font-mono"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">{t("height")}</Label>
+                          <Input
+                            type="number"
+                            value={customHeightInput}
+                            onChange={(e) => setCustomHeightInput(e.target.value)}
+                            onBlur={() => {
+                              let val = parseInt(customHeightInput) || 512
+                              val = Math.min(2048, Math.max(128, val))
+                              setCustomHeightInput(val.toString())
+                            }}
+                            className="bg-secondary/30 border-border/50 text-xs h-8 font-mono"
+                          />
+                        </div>
                       </div>
-                      <div className="space-y-1">
-                        <Label className="text-[10px] text-muted-foreground">{t("height")}</Label>
-                        <Input
-                          type="number"
-                          value={customHeight}
-                          onChange={(e) => setCustomHeight(Math.min(2048, Math.max(256, parseInt(e.target.value) || 512)))}
-                          min={256}
-                          max={2048}
-                          className="bg-secondary/30 border-border/50 text-xs h-8 font-mono"
-                        />
+                      <div className="flex gap-1.5 flex-wrap pt-1">
+                        {[512, 768, 1024, 1280].map(res => (
+                          <Button
+                            key={res}
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-6 px-2 text-[10px] font-mono"
+                            onClick={() => {
+                              setCustomWidthInput(res.toString())
+                              setCustomHeightInput(res.toString())
+                            }}
+                          >
+                            {res}x{res}
+                          </Button>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -1679,7 +1959,12 @@ export function ImageGenerator() {
 
                 {/* Model Selector */}
                 <div className="space-y-2">
-                  <Label className="text-xs font-medium text-muted-foreground">{t("model")}</Label>
+                  <div className="flex justify-between items-center">
+                    <Label className="text-xs font-medium text-muted-foreground">{t("model")}</Label>
+                    <Button variant="ghost" size="sm" className="h-5 text-[10px] px-1 text-primary" onClick={() => setIsModelsOpen(true)}>
+                      查看全部/搜索模型
+                    </Button>
+                  </div>
                   <Select value={selectedModel} onValueChange={setSelectedModel}>
                     <SelectTrigger className="bg-secondary/30 border-border/50 text-xs h-9">
                       <SelectValue />
@@ -1687,7 +1972,7 @@ export function ImageGenerator() {
                     <SelectContent>
                       {models.map(model => (
                         <SelectItem key={model.id} value={model.id} className="text-xs">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 truncate">
                             {model.name}
                             {!DEFAULT_MODELS.some(dm => dm.id === model.id) && (
                               <Badge variant="outline" className="text-[10px]">Custom</Badge>
@@ -1714,7 +1999,7 @@ export function ImageGenerator() {
                   </Select>
                 </div>
 
-                {/* Steps Slider */}
+                {/* Steps Slider (Clamped max 50) */}
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs">
                     <Label className="text-muted-foreground">{t("steps")}</Label>
@@ -1830,11 +2115,13 @@ export function ImageGenerator() {
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="login" className="text-xs">{t("login")}</TabsTrigger>
               <TabsTrigger value="register" className="text-xs">{t("register")}</TabsTrigger>
-              <TabsTrigger value="admin" className="text-xs text-amber-500 font-medium">{t("adminLogin")}</TabsTrigger>
+              {hasAdminPassword && (
+                <TabsTrigger value="admin" className="text-xs text-amber-500 font-medium">{t("adminLogin")}</TabsTrigger>
+              )}
             </TabsList>
 
             <div className="space-y-4 py-4">
-              {authTab === "admin" ? (
+              {authTab === "admin" && hasAdminPassword ? (
                 <div className="space-y-2">
                   <Label className="text-xs flex items-center gap-1.5">
                     <Lock className="w-3.5 h-3.5 text-amber-500" />
@@ -1919,7 +2206,7 @@ export function ImageGenerator() {
                       </div>
                       <p className="text-xs text-muted-foreground line-clamp-2 font-mono">{fav.prompt}</p>
                       <div className="flex justify-end pt-1">
-                        <Button size="sm" variant="secondary" className="h-7 text-xs" onClick={() => { setPrompt(fav.prompt); if (fav.negativePrompt) setNegativePrompt(fav.negativePrompt); setIsFavoritesOpen(false); }}>
+                        <Button size="sm" variant="secondary" className="h-7 text-xs" onClick={() => { importParameters(fav.prompt, fav.negativePrompt); setIsFavoritesOpen(false); }}>
                           {t("usePrompt")}
                         </Button>
                       </div>
@@ -1928,6 +2215,97 @@ export function ImageGenerator() {
                 ))}
               </div>
             )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* History Modal with Batch Management & Thumbnails */}
+      <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="w-5 h-5 text-rose-500" />
+              {t("historyTitle")}
+            </DialogTitle>
+            <DialogDescription>{t("historyDesc")}</DialogDescription>
+          </DialogHeader>
+
+          {/* Batch Controls Toolbar */}
+          {historyRecords.length > 0 && (
+            <div className="flex items-center justify-between pb-2 border-b border-border/40">
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={selectAllHistory}>
+                  {selectedHistoryIds.length === historyRecords.length ? <CheckSquare className="w-3.5 h-3.5 text-primary" /> : <Square className="w-3.5 h-3.5" />}
+                  {selectedHistoryIds.length === historyRecords.length ? t("deselectAll") : t("selectAll")}
+                </Button>
+                {selectedHistoryIds.length > 0 && (
+                  <span className="text-xs text-muted-foreground">已选择 {selectedHistoryIds.length} 项</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {selectedHistoryIds.length > 0 && (
+                  <Button size="sm" variant="destructive" className="h-7 text-xs gap-1" onClick={batchDeleteHistory}>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    {t("batchDelete")} ({selectedHistoryIds.length})
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
+          <ScrollArea className="flex-1 pr-4 my-2">
+            <div className="space-y-3">
+              {historyRecords.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Clock className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-xs">{t("noHistory")}</p>
+                </div>
+              ) : (
+                historyRecords.map(record => {
+                  const isSelected = selectedHistoryIds.includes(record.id)
+                  return (
+                    <Card key={record.id} className={cn("bg-secondary/30 transition-all border-border/40", isSelected && "border-primary/80 ring-1 ring-primary/40 bg-primary/5")}>
+                      <CardContent className="p-3 flex gap-3 items-center">
+                        <button type="button" onClick={() => toggleSelectHistory(record.id)} className="text-muted-foreground hover:text-primary">
+                          {isSelected ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
+                        </button>
+
+                        {/* Thumbnail Image */}
+                        {record.imageData ? (
+                          <img src={record.imageData} alt="" className="w-16 h-16 object-cover rounded-lg flex-shrink-0 bg-muted/20" />
+                        ) : (
+                          <div className="w-16 h-16 rounded-lg bg-muted/20 flex items-center justify-center flex-shrink-0">
+                            <ImageIcon className="w-6 h-6 text-muted-foreground/40" />
+                          </div>
+                        )}
+
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <p className="text-xs font-medium text-foreground line-clamp-2">{record.prompt}</p>
+                          <div className="flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
+                            <span>{formatHistoryDate(record.timestamp)}</span>
+                            <Badge variant="outline" className="text-[10px] py-0 h-4">{record.model}</Badge>
+                            <Badge variant="outline" className="text-[10px] py-0 h-4">{record.width}x{record.height}</Badge>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col gap-1.5 flex-shrink-0">
+                          <Button size="sm" variant="secondary" className="h-7 text-xs gap-1" onClick={() => restoreFromHistory(record)}>
+                            <RefreshCw className="w-3 h-3" />
+                            {t("importParams")}
+                          </Button>
+                          {record.imageData && (
+                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => handleDownload(record.imageData!, record.prompt, "png", record.backgroundColor)}>
+                              <Download className="w-3 h-3" />
+                              {t("download")}
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })
+              )}
+            </div>
           </ScrollArea>
         </DialogContent>
       </Dialog>
@@ -2097,45 +2475,6 @@ export function ImageGenerator() {
         </DialogContent>
       </Dialog>
 
-      {/* History Modal */}
-      <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <History className="w-5 h-5 text-rose-500" />
-              {t("historyTitle")}
-            </DialogTitle>
-            <DialogDescription>{t("historyDesc")}</DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="flex-1 pr-4 my-2">
-            <div className="space-y-3">
-              {historyRecords.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Clock className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                  <p className="text-xs">{t("noHistory")}</p>
-                </div>
-              ) : (
-                historyRecords.map(record => (
-                  <Card key={record.id} className="bg-secondary/30">
-                    <CardContent className="p-3 flex gap-3 items-center justify-between">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs text-foreground line-clamp-2">{record.prompt}</p>
-                        <p className="text-[10px] text-muted-foreground mt-1">{formatHistoryDate(record.timestamp)} | {record.width}x{record.height}</p>
-                      </div>
-                      <div className="flex gap-1">
-                        <Button size="sm" variant="secondary" className="h-7 text-xs" onClick={() => restoreFromHistory(record)}>
-                          {t("restore")}
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
-              )}
-            </div>
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
-
       {/* Albums Modal */}
       <Dialog open={isAlbumsOpen} onOpenChange={setIsAlbumsOpen}>
         <DialogContent className="max-w-xl max-h-[80vh] flex flex-col">
@@ -2175,14 +2514,15 @@ export function ImageGenerator() {
         </DialogContent>
       </Dialog>
 
-      {/* Models Modal */}
+      {/* Models Search Modal with Cover Images & Direct Use */}
       <Dialog open={isModelsOpen} onOpenChange={setIsModelsOpen}>
-        <DialogContent className="max-w-xl max-h-[80vh] flex flex-col">
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Search className="w-5 h-5 text-purple-500" />
               {t("modelsTitle")}
             </DialogTitle>
+            <DialogDescription>{t("modelsDesc")}</DialogDescription>
           </DialogHeader>
           <Input
             placeholder={t("searchModels")}
@@ -2191,18 +2531,53 @@ export function ImageGenerator() {
             className="my-2 text-xs"
           />
           <ScrollArea className="flex-1 pr-4">
-            <div className="space-y-2">
+            <div className="grid sm:grid-cols-2 gap-3">
               {filteredModels.map(model => {
-                const isAdded = models.some(m => m.id === model.id)
+                const isSelected = selectedModel === model.id
                 return (
-                  <Card key={model.id} className="bg-secondary/30 p-3 flex justify-between items-center">
-                    <div>
-                      <h4 className="font-medium text-xs">{model.name}</h4>
-                      <p className="text-[10px] text-muted-foreground">{model.description}</p>
-                    </div>
-                    <Button size="sm" variant={isAdded ? "secondary" : "default"} onClick={() => addModelFromSearch(model)} disabled={isAdded} className="h-7 text-xs">
-                      {isAdded ? "已添加" : "添加"}
-                    </Button>
+                  <Card key={model.id} className={cn("bg-secondary/30 border-border/40 overflow-hidden flex flex-col justify-between transition-all", isSelected && "ring-2 ring-primary border-primary")}>
+                    {model.coverUrl && (
+                      <div className="w-full h-28 overflow-hidden relative">
+                        <img src={model.coverUrl} alt={model.name} className="w-full h-full object-cover" />
+                        <Badge variant="secondary" className="absolute top-2 right-2 text-[10px] bg-black/60 backdrop-blur-sm text-white">
+                          {model.type}
+                        </Badge>
+                      </div>
+                    )}
+                    <CardContent className="p-3 space-y-2 flex-1 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <h4 className="font-semibold text-xs text-foreground truncate">{model.name}</h4>
+                          {isSelected && <Badge variant="default" className="text-[10px] bg-emerald-500">当前使用</Badge>}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">{model.description}</p>
+                        {model.tags && (
+                          <div className="flex gap-1 flex-wrap mt-2">
+                            {model.tags.map(tag => (
+                              <Badge key={tag} variant="outline" className="text-[9px] py-0 h-4">{tag}</Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="pt-2 flex justify-end">
+                        <Button
+                          size="sm"
+                          variant={isSelected ? "secondary" : "default"}
+                          className="h-7 text-xs gap-1"
+                          onClick={() => {
+                            if (!models.some(m => m.id === model.id)) {
+                              addModelFromSearch(model)
+                            }
+                            setSelectedModel(model.id)
+                            setIsModelsOpen(false)
+                            showToast(`已切换至模型: ${model.name}`)
+                          }}
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          {isSelected ? "当前使用中" : t("useModel")}
+                        </Button>
+                      </div>
+                    </CardContent>
                   </Card>
                 )
               })}
